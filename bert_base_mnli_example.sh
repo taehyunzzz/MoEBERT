@@ -92,6 +92,7 @@ if [[ 1 ]]; then
     fi
 fi
 
+
 ###########################################
 # FIXME : MOE CONFIG
 ###########################################
@@ -124,6 +125,10 @@ if [[ 1 ]]; then
     export MODE="moe"
 fi
 
+if [[ ${MODE} == "moe" ]]; then
+    export num_train_epochs=$(( ${num_train_epochs} * 2 ))
+    echo "Increasing training epochs to ${num_train_epochs}"
+fi
 
 ###########################################
 # FIXME : CHECKPOINT
@@ -159,7 +164,6 @@ export importance_file=importance_files/importance_${task_name}.pkl
 # -m \
 # torch.distributed.launch \
 # --nproc_per_node=$num_gpus \
-
 CMD="
     python \
     examples/text-classification/run_glue.py \
@@ -231,10 +235,6 @@ elif [[ ${MODE} == "dense2moe" ]]; then
 
 elif [[ ${MODE} == "moe" ]]; then
     echo "Finetune MoEBERT"
-
-    export num_train_epochs=$(( ${num_train_epochs} * 2 ))
-    echo "Increasing training epochs to ${num_train_epochs}"
-
     CMD+="
             --moebert_load_importance ${importance_file} \
             --moebert_load_expert True \
