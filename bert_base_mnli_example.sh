@@ -95,30 +95,35 @@ fi
 ###########################################
 # FIXME : MOE CONFIG
 ###########################################
-random_seed=0
-moebert_expert_num=8
+if [[ 1 ]]; then
+    random_seed=0
+    moebert_expert_num=8
 
-# moebert_expert_dim=768
-# moebert_expert_dim=1024
-# moebert_expert_dim=2048
-moebert_expert_dim=3072
+    # moebert_expert_dim=768
+    # moebert_expert_dim=1024
+    # moebert_expert_dim=2048
+    moebert_expert_dim=3072
 
-# moebert_share_importance=768
-# moebert_share_importance=1024
-moebert_share_importance=2048
-# moebert_share_importance=3072
+    # moebert_share_importance=768
+    # moebert_share_importance=1024
+    moebert_share_importance=2048
+    # moebert_share_importance=3072
 
-moebert_expert_dropout=0.1
-moebert_load_balance=0.0
-moebert_route_method=hash-random
+    moebert_expert_dropout=0.1
+    moebert_load_balance=0.0
+    moebert_route_method=hash-random
+fi
 
 ###########################################
 # FIXME : MODE
 ###########################################
-# export MODE="dense"
-# export MODE="importance"
-# export MODE="dense2moe"
-export MODE="moe"
+if [[ 1 ]]; then
+    # export MODE="dense"
+    # export MODE="importance"
+    # export MODE="dense2moe"
+    export MODE="moe"
+fi
+
 
 ###########################################
 # FIXME : CHECKPOINT
@@ -226,10 +231,14 @@ elif [[ ${MODE} == "dense2moe" ]]; then
 
 elif [[ ${MODE} == "moe" ]]; then
     echo "Finetune MoEBERT"
+
+    export num_train_epochs=$(( ${num_train_epochs} * 2 ))
+    echo "Increasing training epochs to ${num_train_epochs}"
+
     CMD+="
             --moebert_load_importance ${importance_file} \
-            --moebert moe \
             --moebert_load_expert True \
+            --moebert moe \
             --moebert_distill ${moebert_distill} \
             --moebert_expert_num ${moebert_expert_num} \
             --moebert_expert_dim ${moebert_expert_dim} \

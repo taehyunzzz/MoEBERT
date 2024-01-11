@@ -965,29 +965,30 @@ class Trainer:
 
 
         ###################################################
-        # CONVERT DENSE TO MOE AND EXIT
+        # DEBUG: CONVERT DENSE TO MOE, SAVE, AND EXIT
         ###################################################
-        if self.model.config.moebert_load_experts:
+        if 0:
+            if self.model.config.moebert_load_experts:
 
-            # EVALUATE CONVERTED MODEL 
-            metrics = None
-            if self.eval_dataset_mnli_mm is not None:
-                metrics = self.evaluate()
-                metrics_mm = self.evaluate(self.eval_dataset_mnli_mm)
-                metrics["eval_m_loss"] = metrics["eval_loss"]
-                metrics["eval_mm_loss"] = metrics_mm["eval_loss"]
-                metrics["eval_m_accuracy"] = metrics["eval_accuracy"]
-                metrics["eval_mm_accuracy"] = metrics_mm["eval_accuracy"]
-                metrics["eval_loss"] = (metrics["eval_loss"] + metrics_mm["eval_loss"]) / 2
-                metrics["eval_accuracy"] = (metrics["eval_accuracy"] + metrics_mm["eval_accuracy"]) / 2
-                self.log(metrics)
-            else:
-                metrics = self.evaluate()
+                # EVALUATE CONVERTED MODEL 
+                metrics = None
+                if self.eval_dataset_mnli_mm is not None:
+                    metrics = self.evaluate()
+                    metrics_mm = self.evaluate(self.eval_dataset_mnli_mm)
+                    metrics["eval_m_loss"] = metrics["eval_loss"]
+                    metrics["eval_mm_loss"] = metrics_mm["eval_loss"]
+                    metrics["eval_m_accuracy"] = metrics["eval_accuracy"]
+                    metrics["eval_mm_accuracy"] = metrics_mm["eval_accuracy"]
+                    metrics["eval_loss"] = (metrics["eval_loss"] + metrics_mm["eval_loss"]) / 2
+                    metrics["eval_accuracy"] = (metrics["eval_accuracy"] + metrics_mm["eval_accuracy"]) / 2
+                    self.log(metrics)
+                else:
+                    metrics = self.evaluate()
 
-            # SAVE CONVERTED MOE CHECKPOINT
-            self._save_checkpoint(model, trial, metrics=None)
+                # SAVE CONVERTED MOE CHECKPOINT
+                self._save_checkpoint(model, trial, metrics=None)
 
-            return TrainOutput(0, 0, metrics)
+                return TrainOutput(0, 0, metrics)
 
         # Check if saved optimizer or scheduler states exist
         self._load_optimizer_and_scheduler(resume_from_checkpoint)
