@@ -442,6 +442,8 @@ def main():
             raise ValueError("Model type not recognized by MoE.")
     else:
         meta_model = AutoModelForSequenceClassification
+
+    print(meta_model)
     model = meta_model.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
