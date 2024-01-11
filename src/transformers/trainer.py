@@ -883,13 +883,16 @@ class Trainer:
         if require_process:
             process_ffn(self.model)
 
+        #############################################
+        # This checkpoint should be a DENSE model
+        #############################################
         if resume_from_checkpoint is not None and os.path.isfile(os.path.join(resume_from_checkpoint, WEIGHTS_NAME)):
             logger.info(f"Loading model from {resume_from_checkpoint}).")
             state_dict = torch.load(os.path.join(resume_from_checkpoint, WEIGHTS_NAME), map_location="cpu")
             self._load_state_dict_in_model(state_dict)
             if hasattr(self.model, "teacher") and self.model.teacher is not None:
-                if self.model.config.moebert_load_experts:
-                    raise RuntimeError("Teacher not loaded, set distillation to 0.")
+                # if self.model.config.moebert_load_experts:
+                #     raise RuntimeError("Teacher not loaded, set distillation to 0.")
                 self.model.teacher.load_state_dict(state_dict, strict=False)
             del state_dict
 
@@ -959,6 +962,32 @@ class Trainer:
 
         if delay_optimizer_creation:
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
+
+
+        ###################################################
+        # CONVERT DENSE TO MOE AND EXIT
+        ###################################################
+        if self.model.config.moebert_load_experts:
+
+            # EVALUATE CONVERTED MODEL 
+            metrics = None
+            if self.eval_dataset_mnli_mm is not None:
+                metrics = self.evaluate()
+                metrics_mm = self.evaluate(self.eval_dataset_mnli_mm)
+                metrics["eval_m_loss"] = metrics["eval_loss"]
+                metrics["eval_mm_loss"] = metrics_mm["eval_loss"]
+                metrics["eval_m_accuracy"] = metrics["eval_accuracy"]
+                metrics["eval_mm_accuracy"] = metrics_mm["eval_accuracy"]
+                metrics["eval_loss"] = (metrics["eval_loss"] + metrics_mm["eval_loss"]) / 2
+                metrics["eval_accuracy"] = (metrics["eval_accuracy"] + metrics_mm["eval_accuracy"]) / 2
+                self.log(metrics)
+            else:
+                metrics = self.evaluate()
+
+            # SAVE CONVERTED MOE CHECKPOINT
+            self._save_checkpoint(model, trial, metrics=None)
+
+            return TrainOutput(0, 0, metrics)
 
         # Check if saved optimizer or scheduler states exist
         self._load_optimizer_and_scheduler(resume_from_checkpoint)
@@ -1342,12 +1371,20 @@ class Trainer:
                 self.optimizer.load_state_dict(optimizer_state)
                 self.lr_scheduler.load_state_dict(lr_scheduler_state)
             else:
-                self.optimizer.load_state_dict(
-                    torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location=self.args.device)
-                )
-                with warnings.catch_warnings(record=True) as caught_warnings:
-                    self.lr_scheduler.load_state_dict(torch.load(os.path.join(checkpoint, "scheduler.pt")))
-                reissue_pt_warnings(caught_warnings)
+                #################################################
+                # Do not load if error occurs (dense checkpoint)
+                #################################################
+                try:
+                    self.optimizer.load_state_dict(
+                        torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location=self.args.device)
+                    )
+                    with warnings.catch_warnings(record=True) as caught_warnings:
+                        self.lr_scheduler.load_state_dict(torch.load(os.path.join(checkpoint, "scheduler.pt")))
+                    reissue_pt_warnings(caught_warnings)
+                except Exception as e:
+                    print("Load failed due to {}".format(e))
+                    print("Starting from unloaded scratch")
+
 
         if self.deepspeed:
             # Not sure how to check if there is a saved deepspeed checkpoint, but since it just return None if it fails to find a deepspeed checkpoint this is sort of a check-n-load function
@@ -1510,6 +1547,13 @@ class Trainer:
             loss = self.deepspeed.backward(loss)
         else:
             loss.backward()
+
+        #################################
+        # LOG TRAINING LOSS
+        #################################
+        self.log({
+            "train_loss":loss.detach().item(),
+        })
 
         return loss.detach()
 

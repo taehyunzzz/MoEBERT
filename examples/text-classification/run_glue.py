@@ -443,7 +443,6 @@ def main():
     else:
         meta_model = AutoModelForSequenceClassification
 
-    print(meta_model)
     model = meta_model.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -452,7 +451,7 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-
+    
     if config.moebert_distill > 0:
         teacher = AutoModelForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
@@ -626,6 +625,12 @@ def main():
     else:
         data_collator = None
 
+    torch.distributed.init_process_group(
+        backend="nccl",
+        world_size=1,
+        rank=0,
+    )
+
     # Initialize our Trainer
     trainer = Trainer(
         model=model,
@@ -666,16 +671,16 @@ def main():
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
 
-        if config.moebert_load_experts:
-            from transformers.file_utils import WEIGHTS_NAME
-            import process.utils
+        # if config.moebert_load_experts:
+        #     from transformers.file_utils import WEIGHTS_NAME
+        #     from transformers.moebert.utils import process_ffn
 
-            process.utils.process_ffn(model)
-            if checkpoint is not None and os.path.isfile(os.path.join(checkpoint, WEIGHTS_NAME)):
-                logger.info(f"Loading model from {checkpoint}).")
-                state_dict = torch.load(os.path.join(checkpoint, WEIGHTS_NAME), map_location="cpu")
-                trainer._load_state_dict_in_model(state_dict)
-                del state_dict
+        #     process_ffn(model)
+        #     if checkpoint is not None and os.path.isfile(os.path.join(checkpoint, WEIGHTS_NAME)):
+        #         logger.info(f"Loading model from {checkpoint}).")
+        #         state_dict = torch.load(os.path.join(checkpoint, WEIGHTS_NAME), map_location="cpu")
+        #         trainer._load_state_dict_in_model(state_dict)
+        #         del state_dict
 
         # Loop to handle MNLI double evaluation (matched, mis-matched)
         tasks = [data_args.task_name]

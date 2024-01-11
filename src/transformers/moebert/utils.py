@@ -36,6 +36,7 @@ class ImportanceProcessor:
 
         importance = ImportanceProcessor.load_importance_single(config.moebert_load_importance)[layer_idx, :]
         self.importance = self._split_importance(importance)
+        # self.importance.sort()
 
         self.is_moe = False  # safety check
 
