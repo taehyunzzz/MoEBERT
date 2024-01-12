@@ -136,8 +136,8 @@ fi
 export ckpt_name="checkpoint-3100"
 
 
-export run_name="${task_name}_${MODE}_ba${batch_size}_${lr_scheduler_type}"
 export output_dir="ckpt/${MODE}/${task_name}"
+export run_name="${task_name}_${MODE}_ba${batch_size}_${lr_scheduler_type}"
 
 if [[ ${MODE} == "dense" ]]; then
     export model_name_or_path="bert-base-cased"
@@ -151,6 +151,7 @@ elif [[ ${MODE} == "dense2moe" ]]; then
 
 elif [[ ${MODE} == "moe" ]]; then
     export model_name_or_path="/home/kimth/workspace/MoEBERT/ckpt/dense/${task_name}/model/${ckpt_name}/"
+    export run_name="${run_name}_dff${moebert_expert_dim}_share${moebert_share_importance}"
 
 fi
 

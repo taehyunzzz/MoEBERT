@@ -23,7 +23,9 @@ from ...moebert.utils import (
     MoEModelOutputWithPooling,
     use_experts,
 )
-from ...moebert.moe_layer import MoELayer
+from ...moebert.moe_layer import (
+    MoELayer,
+)
 from ...utils import logging
 
 logger = logging.get_logger(__name__)
@@ -38,7 +40,6 @@ def symmetric_KL_loss(p, q):
 
 def softmax(x):
     return F.softmax(x, dim=-1, dtype=torch.float32)
-
 
 class MoEBertLayer(BertLayer):
     def __init__(self, config, layer_idx=-100):
