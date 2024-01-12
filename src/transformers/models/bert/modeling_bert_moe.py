@@ -18,6 +18,7 @@ from .modeling_bert import (
 from ...modeling_outputs import SequenceClassifierOutput, QuestionAnsweringModelOutput
 from ...moebert.utils import (
     FeedForward,
+    DiffFeedForward,
     ImportanceProcessor,
     MoEModelOutput,
     MoEModelOutputWithPooling,
@@ -59,7 +60,21 @@ class MoEBertLayer(BertLayer):
         self.use_experts = use_experts(layer_idx)
         dropout = config.moebert_expert_dropout if self.use_experts else config.hidden_dropout_prob
         if self.use_experts:
-            ffn = FeedForward(config, config.moebert_expert_dim, dropout)
+            if config.moebert_is_diffmoe:
+                ffn = DiffFeedForward(
+                    config              = config                            ,
+                    intermediate_size   = config.intermediate_size          ,
+                    shared_size         = config.moebert_share_importance   ,
+                    dropout             = dropout                           ,
+                    fixmask_init        = config.moebert_fixmask_init       ,
+                    alpha_init          = config.moebert_alpha_init         ,
+                    concrete_lower      = config.moebert_concrete_lower     ,
+                    concrete_upper      = config.moebert_concrete_upper     ,
+                    structured          = config.moebert_structured         ,
+                    sparsity_pen        = config.moebert_sparsity_pen       ,
+                )
+            else :
+                ffn = FeedForward(config, config.moebert_expert_dim, dropout)
             self.experts = MoELayer(
                 hidden_size=config.hidden_size,
                 expert=ffn,
@@ -153,6 +168,7 @@ class MoEBertEncoder(BertEncoder):
     def __init__(self, config):
         nn.Module.__init__(self)
         self.config = config
+
         self.layer = nn.ModuleList([MoEBertLayer(config, i) for i in range(config.num_hidden_layers)])
 
     def forward(
@@ -374,12 +390,12 @@ class MoEBertModel(BertModel):
             gate_loss=encoder_outputs.gate_loss,
         )
 
-
 class MoEBertForSequenceClassification(BertPreTrainedModel):
     _keys_to_ignore_on_save = []
 
     def __init__(self, config):
         super().__init__(config)
+        self.config = config
         self.num_labels = config.num_labels
         self.teacher = None
         self.load_balance_alpha = config.moebert_load_balance
@@ -488,9 +504,18 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
             )
             distillation_loss = self.get_distillation_loss(outputs, logits, teacher_outputs)
 
+        ####################################
+        # Get Diff Loss
+        diff_l0_loss = torch.tensor(0.0, device=self.device)
+        for n, mod in self.named_modules():
+            if mod.__class__.__name__ == "DiffFeedForward":
+                diff_l0_loss += mod._get_sparsity_loss()
+        ####################################
+
         loss = loss \
                + gate_loss * self.load_balance_alpha \
-               + distillation_loss * self.distill_alpha
+               + distillation_loss * self.distill_alpha \
+               + diff_l0_loss
 
         if not return_dict:
             output = (logits,) + outputs[2:]
@@ -521,7 +546,6 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         loss = loss + prediction_loss
 
         return loss
-
 
 class MoEBertForQuestionAnswering(BertPreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler"]

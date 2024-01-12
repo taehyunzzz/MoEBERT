@@ -23,7 +23,13 @@ def process_ffn(model):
     for i in range(model.config.num_hidden_layers):
         model_layer = inner_model.encoder.layer[i]
         if model_layer.use_experts:
-            model_layer.importance_processor.load_experts(model_layer)
+            if model.config.moebert_is_diffmoe:
+                model_layer.importance_processor.load_diffexperts(
+                    diff_model_layer=model_layer,
+                    shared_size=model.config.moebert_share_importance,
+                )
+            else :
+                model_layer.importance_processor.load_experts(model_layer)
 
 
 class ImportanceProcessor:
@@ -36,7 +42,6 @@ class ImportanceProcessor:
 
         importance = ImportanceProcessor.load_importance_single(config.moebert_load_importance)[layer_idx, :]
         self.importance = self._split_importance(importance)
-        # self.importance.sort()
 
         self.is_moe = False  # safety check
 
@@ -82,6 +87,45 @@ class ImportanceProcessor:
             expert_list[i].LayerNorm.bias.data = layernorm_bias_data.clone()
         del model_layer.intermediate
         del model_layer.output
+        self.is_moe = True
+
+    def load_diffexperts(self, diff_model_layer, shared_size):
+        expert_list             = diff_model_layer.experts.experts
+        fc1_weight_data         = diff_model_layer.intermediate.dense.weight.data
+        fc1_bias_data           = diff_model_layer.intermediate.dense.bias.data
+        fc2_weight_data         = diff_model_layer.output.dense.weight.data
+        fc2_bias_data           = diff_model_layer.output.dense.bias.data
+        layernorm_weight_data   = diff_model_layer.output.LayerNorm.weight.data
+        layernorm_bias_data     = diff_model_layer.output.LayerNorm.bias.data
+
+        for i in range(self.num_local_experts):
+            idx = self.importance[i]
+
+            shared_idx = idx[:shared_size]
+            unique_idx = idx[shared_size:]
+            
+            # shared important weights
+            expert_list[i].fc1_shared.weight.data   = fc1_weight_data[shared_idx, :].clone()
+            expert_list[i].fc1_shared.bias.data     = fc1_bias_data[shared_idx].clone()
+            expert_list[i].fc2_shared.weight.data   = fc2_weight_data[:, shared_idx].clone()
+            expert_list[i].fc2_shared.bias.data     = fc2_bias_data.clone()
+
+            # unique weights
+            expert_list[i].fc1_unique.weight.data   = fc1_weight_data[unique_idx, :].clone()
+            expert_list[i].fc1_unique.bias.data     = fc1_bias_data[unique_idx].clone()
+            expert_list[i].fc2_unique.weight.data   = fc2_weight_data[:, unique_idx].clone()
+            expert_list[i].fc2_unique.bias.data     = fc2_bias_data.clone()
+
+            expert_list[i].LayerNorm.weight.data = layernorm_weight_data.clone()
+            expert_list[i].LayerNorm.bias.data = layernorm_bias_data.clone()
+
+            ###########################################
+            # initiate diff parametrization
+            expert_list[i]._add_diff_parametrizations()
+            ###########################################
+
+        del diff_model_layer.intermediate
+        del diff_model_layer.output
         self.is_moe = True
 
 
@@ -279,33 +323,37 @@ class DiffFeedForward(nn.Module):
 
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(dropout)
+        self.model_state = "BASE" # (BASE, FINETUNING, FIXMASK)
 
+    def _add_diff_parametrizations(self):
         # Apply diff parametrization to shared submatrices
         for i, base_module in enumerate([self.fc1_shared, self.fc2_shared]):
             for n,p in list(base_module.named_parameters()):
+
+                # skip bias term
+                if "bias" in n:
+                    continue
 
                 # freeze the shared important submatrices
                 p.requires_grad = False
 
                 # parametrize the shared important submatrices
-                if fixmask_init:
-                    # in case of fixmask init, can only initalize with dummy values
+                if self.fixmask_init:
+                    self.model_state = "FIXMASK"
                     parametrize.register_parametrization(base_module, n, DiffWeightFixmask(
-                        torch.zeros_like(p), torch.ones_like(p, dtype=bool)
-                    ))
-                else:
-                    parametrize.register_parametrization(base_module, n, DiffWeightFinetune(p,
-                                                                                            alpha_init,
-                                                                                            concrete_lower,
-                                                                                            concrete_upper,
-                                                                                            structured,
-                                                                                            shared_size,
-                                                                                            i
-                                                                                            ))
-                if fixmask_init:
-                    self.model_state = "FIXEDMASK"
+                            torch.zeros_like(p), torch.ones_like(p, dtype=bool)
+                        )
+                    )
                 else:
                     self.model_state = "FINETUNING"
+                    parametrize.register_parametrization(base_module, n, DiffWeightFinetune(p,
+                                                                                            self.alpha_init,
+                                                                                            self.concrete_lower,
+                                                                                            self.concrete_upper,
+                                                                                            self.structured,
+                                                                                            self.shared_size,
+                                                                                            i
+                                                                                            ))
 
     @property
     def parametrized(self) -> bool:
@@ -557,14 +605,14 @@ class DiffFeedForward(nn.Module):
         input_tensor = hidden_states
 
         # shared important layers
-        hidden_states_shared = self.fc1_shared(hidden_states_shared)
+        hidden_states_shared = self.fc1_shared(hidden_states)
         hidden_states_shared = self.intermediate_act_fn(hidden_states_shared)
-        hidden_states_shared = self.fc2_shared(hidden_states)
+        hidden_states_shared = self.fc2_shared(hidden_states_shared)
 
         # expert-unique layers
-        hidden_states_unique = self.fc1_unique(hidden_states_unique)
+        hidden_states_unique = self.fc1_unique(hidden_states)
         hidden_states_unique = self.intermediate_act_fn(hidden_states_unique)
-        hidden_states_unique = self.fc2_unique(hidden_states)
+        hidden_states_unique = self.fc2_unique(hidden_states_unique)
 
         # add partial sums
         hidden_states = hidden_states_shared + hidden_states_unique

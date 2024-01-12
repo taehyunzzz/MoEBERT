@@ -94,6 +94,23 @@ fi
 
 
 ###########################################
+# FIXME : MODE
+###########################################
+if [[ 1 ]]; then
+    # export MODE="dense"
+    # export MODE="importance"
+    # export MODE="dense2moe"
+    # export MODE="moe"
+    export MODE="diffmoe"
+fi
+
+if [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
+    export num_train_epochs=$(( ${num_train_epochs} * 2 ))
+    echo "Increasing training epochs to ${num_train_epochs}"
+fi
+
+
+###########################################
 # FIXME : MOE CONFIG
 ###########################################
 if [[ 1 ]]; then
@@ -113,21 +130,14 @@ if [[ 1 ]]; then
     moebert_expert_dropout=0.1
     moebert_load_balance=0.0
     moebert_route_method=hash-random
-fi
 
-###########################################
-# FIXME : MODE
-###########################################
-if [[ 1 ]]; then
-    # export MODE="dense"
-    # export MODE="importance"
-    # export MODE="dense2moe"
-    export MODE="moe"
-fi
-
-if [[ ${MODE} == "moe" ]]; then
-    export num_train_epochs=$(( ${num_train_epochs} * 2 ))
-    echo "Increasing training epochs to ${num_train_epochs}"
+    moebert_is_diffmoe=$(( ${MODE} == "diffmoe" ))
+    moebert_fixmask_init=False
+    moebert_alpha_init=5.0
+    moebert_concrete_lower=-1.5
+    moebert_concrete_upper=1.5
+    moebert_structured=True
+    moebert_sparsity_pen=1.25e-7
 fi
 
 ###########################################
@@ -149,7 +159,7 @@ elif [[ ${MODE} == "importance" ]]; then
 elif [[ ${MODE} == "dense2moe" ]]; then
     export model_name_or_path="/home/kimth/workspace/MoEBERT/ckpt/dense/${task_name}/model/${ckpt_name}/"
 
-elif [[ ${MODE} == "moe" ]]; then
+elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
     export model_name_or_path="/home/kimth/workspace/MoEBERT/ckpt/dense/${task_name}/model/${ckpt_name}/"
     export run_name="${run_name}_dff${moebert_expert_dim}_share${moebert_share_importance}"
 
@@ -234,12 +244,12 @@ elif [[ ${MODE} == "dense2moe" ]]; then
         "
         # Keep do_train, but it will finish automatically after evaluation instead
 
-elif [[ ${MODE} == "moe" ]]; then
+elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
     echo "Finetune MoEBERT"
     CMD+="
             --moebert_load_importance ${importance_file} \
             --moebert_load_expert True \
-            --moebert moe \
+            --moebert ${MODE} \
             --moebert_distill ${moebert_distill} \
             --moebert_expert_num ${moebert_expert_num} \
             --moebert_expert_dim ${moebert_expert_dim} \
@@ -247,6 +257,13 @@ elif [[ ${MODE} == "moe" ]]; then
             --moebert_load_balance ${moebert_load_balance} \
             --moebert_route_method ${moebert_route_method} \
             --moebert_share_importance ${moebert_share_importance} \
+            --moebert_is_diffmoe ${moebert_is_diffmoe} \
+            --moebert_fixmask_init ${moebert_fixmask_init} \
+            --moebert_alpha_init ${moebert_alpha_init} \
+            --moebert_concrete_lower ${moebert_concrete_lower} \
+            --moebert_concrete_upper ${moebert_concrete_upper} \
+            --moebert_structured ${moebert_structured} \
+            --moebert_sparsity_pen ${moebert_sparsity_pen} \
             --do_train \
             --do_eval
         "

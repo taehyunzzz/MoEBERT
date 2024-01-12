@@ -881,7 +881,9 @@ class Trainer:
         # otherwise (e.g., loading a pre-trained RoBERTa), first load the weights, then expand the model
         require_process = self.model.config.moebert_load_experts
         if require_process:
-            process_ffn(self.model)
+            process_ffn(
+                model=self.model,
+            )
 
         #############################################
         # This checkpoint should be a DENSE model
@@ -898,7 +900,10 @@ class Trainer:
 
         require_process = not require_process and self.model.config.moebert
         if require_process:
-            process_ffn(self.model)
+            process_ffn(
+                model=self.model,
+                is_diffmoe=self.model.config.moebert == "diffmoe"
+            )
 
         logger.info(self.model)
         logger.info(

@@ -40,7 +40,9 @@ from transformers import (
     default_data_collator,
     set_seed,
 )
-from transformers.models.bert.modeling_bert_moe import MoEBertForSequenceClassification
+from transformers.models.bert.modeling_bert_moe import (
+    MoEBertForSequenceClassification,
+)
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import check_min_version
 
@@ -221,6 +223,39 @@ class ModelArguments:
         default=512,
         metadata={"help": "Amount of neurons to share across experts."}
     )
+
+    ###################################################################
+    # DiffMoE Params
+    moebert_is_diffmoe: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
+    moebert_fixmask_init: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
+    moebert_alpha_init: Optional[float] = field(
+        default=5.0,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
+    moebert_concrete_lower: Optional[float] = field(
+        default=-1.5,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
+    moebert_concrete_upper: Optional[float] = field(
+        default=1.5,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
+    moebert_structured: Optional[bool] = field(
+        default=True,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
+    moebert_sparsity_pen: Optional[float] = field(
+        default=1.25e-7,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
+    ###################################################################
+
     apply_lora: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether to apply LoRA or not."},
@@ -427,6 +462,17 @@ def main():
     config.moebert_route_method = model_args.moebert_route_method
     config.moebert_share_importance = model_args.moebert_share_importance
 
+    ############################################################
+    # DiffMoE arguments
+    config.moebert_is_diffmoe      = model_args.moebert_is_diffmoe
+    config.moebert_fixmask_init    = model_args.moebert_fixmask_init
+    config.moebert_alpha_init      = model_args.moebert_alpha_init
+    config.moebert_concrete_lower  = model_args.moebert_concrete_lower
+    config.moebert_concrete_upper  = model_args.moebert_concrete_upper
+    config.moebert_structured      = model_args.moebert_structured
+    config.moebert_sparsity_pen    = model_args.moebert_sparsity_pen
+    ############################################################
+
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
@@ -435,7 +481,7 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
     )
 
-    if config.moebert == "moe":
+    if config.moebert in ["moe", "diffmoe"] :
         if config.model_type == "bert":
             meta_model = MoEBertForSequenceClassification
         else:
