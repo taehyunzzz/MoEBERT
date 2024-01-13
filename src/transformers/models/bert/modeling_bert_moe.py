@@ -509,7 +509,7 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         diff_l0_loss = self.get_sparsity_loss()
         ###############################################################
 
-        loss = loss \
+        total_loss = loss \
                + gate_loss * self.load_balance_alpha \
                + distillation_loss * self.distill_alpha \
                + diff_l0_loss * self.config.moebert_l0_loss_scale
@@ -517,7 +517,8 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         ###############################################################
         # Record loss
         self.log_msg = {
-            "loss" : loss.item(),
+            "train_loss" : total_loss.item(),
+            "cross_entropy_loss" : loss.item(),
             "gate_loss" : gate_loss.item() * self.load_balance_alpha if (type(gate_loss) == torch.Tensor) \
                                                                 else gate_loss * self.load_balance_alpha,
             "distillation_loss" : distillation_loss.item() * self.distill_alpha,
@@ -527,10 +528,10 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
 
         if not return_dict:
             output = (logits,) + outputs[2:]
-            return ((loss,) + output) if loss is not None else output
+            return ((total_loss,) + output) if total_loss is not None else output
 
         return SequenceClassifierOutput(
-            loss=loss,
+            loss=total_loss,
             logits=logits,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
