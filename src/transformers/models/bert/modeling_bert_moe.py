@@ -60,7 +60,7 @@ class MoEBertLayer(BertLayer):
         self.use_experts = use_experts(layer_idx)
         dropout = config.moebert_expert_dropout if self.use_experts else config.hidden_dropout_prob
         if self.use_experts:
-            if config.moebert_is_diffmoe:
+            if config.moebert == "diffmoe" :
                 ffn = DiffFeedForward(
                     config              = config                            ,
                     intermediate_size   = config.intermediate_size          ,
@@ -532,7 +532,7 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
             "n_p_zero" : n_p_zero,
             "n_p_mid" : n_p_mid,
             "n_p_one" : n_p_one,
-            "sparsity" : int(n_p_mid / n_p * 100),
+            "sparsity" : int(n_p_mid / (n_p + 1e-8) * 100),
         }
         ###############################################################
 

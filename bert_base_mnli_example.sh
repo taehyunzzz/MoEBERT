@@ -135,7 +135,6 @@ if [[ 1 ]]; then
     moebert_load_balance=0.0
     moebert_route_method=hash-random
 
-    moebert_is_diffmoe=$(( ${MODE} == "diffmoe" ))
     moebert_fixmask_init=False
     moebert_alpha_init=5.0
     moebert_concrete_lower=-1.5
@@ -280,7 +279,6 @@ elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
             --moebert_load_balance ${moebert_load_balance} \
             --moebert_route_method ${moebert_route_method} \
             --moebert_share_importance ${moebert_share_importance} \
-            --moebert_is_diffmoe ${moebert_is_diffmoe} \
             --moebert_fixmask_init ${moebert_fixmask_init} \
             --moebert_alpha_init ${moebert_alpha_init} \
             --moebert_concrete_lower ${moebert_concrete_lower} \

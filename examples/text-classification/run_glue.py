@@ -225,10 +225,6 @@ class ModelArguments:
 
     ###################################################################
     # DiffMoE Params
-    moebert_is_diffmoe: Optional[bool] = field(
-        default=False,
-        metadata={"help": "Amount of neurons to share across experts."}
-    )
     moebert_fixmask_init: Optional[bool] = field(
         default=False,
         metadata={"help": "Amount of neurons to share across experts."}
@@ -472,7 +468,6 @@ def main():
 
     ############################################################
     # DiffMoE arguments
-    config.moebert_is_diffmoe           = model_args.moebert_is_diffmoe
     config.moebert_fixmask_init         = model_args.moebert_fixmask_init
     config.moebert_alpha_init           = model_args.moebert_alpha_init
     config.moebert_concrete_lower       = model_args.moebert_concrete_lower
