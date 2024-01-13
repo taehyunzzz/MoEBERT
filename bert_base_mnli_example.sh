@@ -1,6 +1,6 @@
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 export MASTER_ADDR=localhost
-export MASTER_PORT=9101
+export MASTER_PORT=9100
 export RANK=0
 export LOCAL_RANK=0
 export WORLD_SIZE=1
@@ -101,8 +101,8 @@ if [[ 1 ]]; then
     # export MODE="dense"
     # export MODE="importance"
     # export MODE="dense2moe"
-    export MODE="moe"
-    # export MODE="diffmoe"
+    # export MODE="moe"
+    export MODE="diffmoe"
 fi
 
 if [[ ${MODE} == "moe" ]]; then

@@ -23,7 +23,7 @@ def process_ffn(model):
     for i in range(model.config.num_hidden_layers):
         model_layer = inner_model.encoder.layer[i]
         if model_layer.use_experts:
-            if model.config.moebert_is_diffmoe:
+            if model.config.moebert == "diffmoe":
                 model_layer.importance_processor.load_diffexperts(
                     diff_model_layer=model_layer,
                     shared_size=model.config.moebert_share_importance,
