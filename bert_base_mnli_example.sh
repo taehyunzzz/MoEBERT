@@ -99,9 +99,9 @@ fi
 ###########################################
 if [[ 1 ]]; then
     # export MODE="dense"
-    export MODE="importance"
+    # export MODE="importance"
     # export MODE="dense2moe"
-    # export MODE="moe"
+    export MODE="moe"
     # export MODE="diffmoe"
 fi
 
@@ -238,8 +238,8 @@ elif [[ ${MODE} == "importance" ]]; then
          --preprocess_importance y"
 
     # Merge importance
-    CMD2="python merge_importance.py --num_files 1 ; \
-            mv importance.pkl importance_files/importance_${task_name}.pkl"
+    CMD2="python merge_importance.py --num_files 1"
+    CMD3="mv importance.pkl importance_files/importance_${task_name}.pkl"
 
 
 elif [[ ${MODE} == "dense2moe" ]]; then
@@ -301,4 +301,7 @@ ${CMD}
 if [[ ${MODE} == "importance" ]]; then
     echo ${CMD2}
     ${CMD2}
+
+    echo ${CMD3}
+    ${CMD3}
 fi
