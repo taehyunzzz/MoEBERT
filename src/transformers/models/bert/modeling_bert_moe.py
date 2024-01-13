@@ -532,7 +532,7 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
             "n_p_zero" : n_p_zero,
             "n_p_mid" : n_p_mid,
             "n_p_one" : n_p_one,
-            "sparsity" : int(n_p_zero / (n_p + 1e-8) * 100),
+            "sparsity" : int(n_p_zero / (n_p + 1e-8) * 10000.0) / 100.0,
         }
         ###############################################################
 
