@@ -1,6 +1,13 @@
-export CUDA_VISIBLE_DEVICES=0
+#/bin/bash
+
+task_name=$1
+cuda_device=$2
+port_num=$3
+mode=$4
+
+export CUDA_VISIBLE_DEVICES=${cuda_device}
 export MASTER_ADDR=localhost
-export MASTER_PORT=9100
+export MASTER_PORT=${port_num}
 export RANK=0
 export LOCAL_RANK=0
 export WORLD_SIZE=1
@@ -30,7 +37,6 @@ export WANDB_PROJECT="diffmoebert"
 ###########################################
 # FIXME : TASK (set as arg)
 ###########################################
-task_name=$1
 if [[ 1 ]]; then
     if [[ ${task_name} == "cola" ]]; then
         export learning_rate="2e-5"
@@ -101,7 +107,8 @@ if [[ 1 ]]; then
     # export MODE="dense"
     # export MODE="importance"
     # export MODE="moe"
-    export MODE="diffmoe"
+    # export MODE="diffmoe"
+    export MODE=${mode}
 fi
 
 if [[ ${MODE} == "moe" ]]; then
