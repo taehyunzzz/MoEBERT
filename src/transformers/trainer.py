@@ -671,6 +671,31 @@ class Trainer:
             num_training_steps=num_training_steps,
         )
 
+    def create_diffmoe_optimizer(self) -> torch.optim.Optimizer:
+
+        optimizer_grouped_parameters = self.model.get_diffmoe_param_groups(self.args)
+
+        optimizer_cls = Adafactor if self.args.adafactor else AdamW
+        if self.args.adafactor:
+            optimizer_cls = Adafactor
+            optimizer_kwargs = {"scale_parameter": False, "relative_step": False}
+        else:
+            optimizer_cls = AdamW
+            optimizer_kwargs = {
+                "betas": (self.args.adam_beta1, self.args.adam_beta2),
+                "eps": self.args.adam_epsilon,
+            }
+        optimizer_kwargs["lr"] = self.args.learning_rate
+        if self.sharded_ddp == ShardedDDPOption.SIMPLE:
+            return OSS(
+                params=optimizer_grouped_parameters,
+                optim=optimizer_cls,
+                **optimizer_kwargs,
+            )
+
+        return optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+
+
     def create_optimizer_and_scheduler(self, num_training_steps: int):
         """
         Setup the optimizer and the learning rate scheduler.
@@ -679,7 +704,10 @@ class Trainer:
         Trainer's init through :obj:`optimizers`, or subclass and override this method in a subclass.
         """
         if self.optimizer is None:
-            self.optimizer = self.create_optimizer()
+            if self.model.config.moebert == "diffmoe":
+                self.optimizer = self.create_diffmoe_optimizer()
+            else:
+                self.optimizer = self.create_optimizer()
 
         if self.lr_scheduler is None:
             self.lr_scheduler = self.create_scheduler(
@@ -956,6 +984,7 @@ class Trainer:
             self.lr_scheduler = lr_scheduler
         elif not delay_optimizer_creation:
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
+            
         self.state = TrainerState()
         self.state.is_hyper_param_search = trial is not None
 

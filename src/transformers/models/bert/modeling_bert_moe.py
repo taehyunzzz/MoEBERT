@@ -504,18 +504,22 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
             )
             distillation_loss = self.get_distillation_loss(outputs, logits, teacher_outputs)
 
-        ####################################
-        # Get Diff Loss
-        diff_l0_loss = torch.tensor(0.0, device=self.device)
+        ###############################################################
+        # Record scaled distillation loss
+        self.gate_loss = gate_loss * self.load_balance_alpha
+        self.distillation_loss = distillation_loss * self.distill_alpha
+
+        # Get and record diff Loss
+        self.diff_l0_loss = torch.tensor(0.0, device=self.device)
         for n, mod in self.named_modules():
             if mod.__class__.__name__ == "DiffFeedForward":
-                diff_l0_loss += mod._get_sparsity_loss()
-        ####################################
+                self.diff_l0_loss += mod._get_sparsity_loss()
+        ###############################################################
 
         loss = loss \
                + gate_loss * self.load_balance_alpha \
                + distillation_loss * self.distill_alpha \
-               + diff_l0_loss
+               + self.diff_l0_loss
 
         if not return_dict:
             output = (logits,) + outputs[2:]
@@ -546,6 +550,77 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         loss = loss + prediction_loss
 
         return loss
+
+    def get_diffmoe_param_groups(self,trainer_args):
+
+        param_dense_with_decay = []
+        param_dense_no_decay = []
+        param_finetune = []
+        param_alpha = []
+        param_diff_weight = []
+
+        for n,p in list(self.named_parameters()):
+
+            param_suffix = n.split(".")[-1]
+
+            if "teacher" in n :
+                continue
+            elif param_suffix == "original":
+                continue
+            elif param_suffix == "diff_weight":
+                param_diff_weight.append(p)
+            elif param_suffix == "finetune":
+                param_finetune.append(p)
+            elif (param_suffix == "alpha") or (param_suffix == "alpha_group"):
+                param_alpha.append(p)
+            else :
+                if ("LayerNorm" in n) or (param_suffix == "bias"):
+                    param_dense_no_decay.append(p)
+                else :
+                    param_dense_with_decay.append(p)
+
+        param_groups = [
+            {
+                "name": "param_dense_with_decay",
+                "params": param_dense_with_decay,
+                "weight_decay": trainer_args.weight_decay,
+                "lr": trainer_args.learning_rate,
+            },
+            {
+                "name": "param_dense_no_decay",
+                "params": param_dense_no_decay,
+                "weight_decay": 0.0,
+                "lr": trainer_args.learning_rate,
+            },
+        ]
+        
+        if param_finetune != []:
+            param_groups.extend([
+                {
+                    "name": "param_finetune",
+                    "params": param_finetune,
+                    "weight_decay": trainer_args.weight_decay,
+                    "lr": trainer_args.learning_rate,
+                },
+                {
+                    "name": "param_alpha",
+                    "params": param_alpha,
+                    "weight_decay": trainer_args.weight_decay,
+                    "lr": self.config.moebert_learning_rate_alpha,
+                },
+            ])
+
+        if param_diff_weight != []:
+            param_groups.extend([
+                {
+                    "name": "param_diff_weight",
+                    "params": param_diff_weight,
+                    "weight_decay": trainer_args.weight_decay,
+                    "lr": trainer_args.learning_rate,
+                },
+            ])
+
+        return param_groups
 
 class MoEBertForQuestionAnswering(BertPreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler"]

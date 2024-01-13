@@ -271,4 +271,4 @@ fi
 
 # RUN CMD
 echo ${CMD}
-${CMD}
+# ${CMD}

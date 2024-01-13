@@ -46,7 +46,6 @@ from transformers.models.bert.modeling_bert_moe import (
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import check_min_version
 
-
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.4.0")
 
@@ -252,6 +251,10 @@ class ModelArguments:
     )
     moebert_sparsity_pen: Optional[float] = field(
         default=1.25e-7,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
+    moebert_learning_rate_alpha: Optional[float] = field(
+        default=1e-3,
         metadata={"help": "Amount of neurons to share across experts."}
     )
     ###################################################################
@@ -462,16 +465,19 @@ def main():
     config.moebert_route_method = model_args.moebert_route_method
     config.moebert_share_importance = model_args.moebert_share_importance
 
+
     ############################################################
     # DiffMoE arguments
-    config.moebert_is_diffmoe      = model_args.moebert_is_diffmoe
-    config.moebert_fixmask_init    = model_args.moebert_fixmask_init
-    config.moebert_alpha_init      = model_args.moebert_alpha_init
-    config.moebert_concrete_lower  = model_args.moebert_concrete_lower
-    config.moebert_concrete_upper  = model_args.moebert_concrete_upper
-    config.moebert_structured      = model_args.moebert_structured
-    config.moebert_sparsity_pen    = model_args.moebert_sparsity_pen
+    config.moebert_is_diffmoe           = model_args.moebert_is_diffmoe
+    config.moebert_fixmask_init         = model_args.moebert_fixmask_init
+    config.moebert_alpha_init           = model_args.moebert_alpha_init
+    config.moebert_concrete_lower       = model_args.moebert_concrete_lower
+    config.moebert_concrete_upper       = model_args.moebert_concrete_upper
+    config.moebert_structured           = model_args.moebert_structured
+    config.moebert_sparsity_pen         = model_args.moebert_sparsity_pen
+    config.moebert_learning_rate_alpha  = model_args.moebert_learning_rate_alpha
     ############################################################
+
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
