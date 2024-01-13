@@ -515,14 +515,24 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
                + diff_l0_loss * self.config.moebert_l0_loss_scale
 
         ###############################################################
-        # Record loss
+        # Log results
+        n_p, n_p_zero, n_p_one = self.count_non_zero_params()
+        n_p_mid = n_p - n_p_zero - n_p_one
+
         self.log_msg = {
+            # Loss
             "train_loss" : total_loss.item(),
             "cross_entropy_loss" : loss.item(),
             "gate_loss" : gate_loss.item() * self.load_balance_alpha if (type(gate_loss) == torch.Tensor) \
                                                                 else gate_loss * self.load_balance_alpha,
             "distillation_loss" : distillation_loss.item() * self.distill_alpha,
             "diff_l0_loss" : diff_l0_loss.item() * self.config.moebert_l0_loss_scale,
+
+            # Sparsity
+            "n_p_zero" : n_p_zero,
+            "n_p_mid" : n_p_mid,
+            "n_p_one" : n_p_one,
+            "sparsity" : int(n_p_mid / n_p * 100),
         }
         ###############################################################
 
@@ -556,6 +566,16 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
 
         return loss
     
+    def count_non_zero_params(self):
+        n_p, n_p_zero, n_p_one = 0, 0, 0
+        for n, mod in self.named_modules():
+            if mod.__class__.__name__ == "DiffFeedForward":
+                a,b,c = mod._count_non_zero_params()
+                n_p += a
+                n_p_zero += b
+                n_p_one += c
+        return (n_p, n_p_zero, n_p_one)
+
     def get_sparsity_loss(self):
         diff_l0_loss = torch.tensor(0.0, device=self.device)
         for n, mod in self.named_modules():

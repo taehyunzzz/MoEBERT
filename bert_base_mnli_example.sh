@@ -1,6 +1,6 @@
 export CUDA_VISIBLE_DEVICES=1
 export MASTER_ADDR=localhost
-export MASTER_PORT=9100
+export MASTER_PORT=9101
 export RANK=0
 export LOCAL_RANK=0
 export WORLD_SIZE=1
@@ -20,9 +20,9 @@ export warmup_steps=100
 export max_seq_length=256
 
 export logging_steps=0
-export eval_steps=200
-export save_steps=100
-export save_total_limit=5
+export eval_steps=50
+export save_steps=50
+export save_total_limit=3
 
 export WANDB_ENTITY="taehyunzzz"
 export WANDB_PROJECT="diffmoebert"
@@ -69,10 +69,11 @@ if [[ 1 ]]; then
 
     elif [[ ${task_name} == "rte" ]]; then
         export learning_rate="1e-5"
-        export batch_size=8
+        export batch_size=16
         export num_train_epochs=10
         export weight_decay=0.01
         export moebert_distill=1.0
+        export ckpt_name="checkpoint-1550"
 
     elif [[ ${task_name} == "sst2" ]]; then
         export learning_rate="2e-5"
@@ -98,14 +99,17 @@ fi
 ###########################################
 if [[ 1 ]]; then
     # export MODE="dense"
-    # export MODE="importance"
+    export MODE="importance"
     # export MODE="dense2moe"
     # export MODE="moe"
-    export MODE="diffmoe"
+    # export MODE="diffmoe"
 fi
 
-if [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
+if [[ ${MODE} == "moe" ]]; then
     export num_train_epochs=$(( ${num_train_epochs} * 2 ))
+    echo "Increasing training epochs to ${num_train_epochs}"
+elif [[ ${MODE} == "diffmoe" ]]; then
+    export num_train_epochs=$(( ${num_train_epochs} * 3 ))
     echo "Increasing training epochs to ${num_train_epochs}"
 fi
 
@@ -115,7 +119,7 @@ fi
 ###########################################
 if [[ 1 ]]; then
     random_seed=0
-    moebert_expert_num=8
+    moebert_expert_num=4
 
     # moebert_expert_dim=768
     # moebert_expert_dim=1024
@@ -138,13 +142,15 @@ if [[ 1 ]]; then
     moebert_concrete_upper=1.5
     moebert_structured=True
     moebert_sparsity_pen=1.25e-7
+    
+    # diff pruning params
+    moebert_learning_rate_alpha=3e-2
+    moebert_l0_loss_scale=1e1
 fi
 
 ###########################################
 # FIXME : CHECKPOINT
 ###########################################
-export ckpt_name="checkpoint-3100"
-
 
 export output_dir="ckpt/${MODE}/${task_name}"
 export run_name="${task_name}_${MODE}_ba${batch_size}_${lr_scheduler_type}"
@@ -153,15 +159,22 @@ if [[ ${MODE} == "dense" ]]; then
     export model_name_or_path="bert-base-cased"
     # export model_name_or_path="/home/kimth/workspace/MoEBERT/ckpt/dense/${task_name}/model/${ckpt_name}/"
 
-elif [[ ${MODE} == "importance" ]]; then
+else 
+    if [[ -z ${ckpt_name} ]]; then
+        echo "[ERROR] VARIABLE ckpt_name not specified for task ${task_name}. Aborting"
+        exit 1
+    fi
+
     export model_name_or_path="/home/kimth/workspace/MoEBERT/ckpt/dense/${task_name}/model/${ckpt_name}/"
 
-elif [[ ${MODE} == "dense2moe" ]]; then
-    export model_name_or_path="/home/kimth/workspace/MoEBERT/ckpt/dense/${task_name}/model/${ckpt_name}/"
+    if [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
+        export run_name+="_ex${moebert_expert_num}"
+        export run_name+="_dff${moebert_expert_dim}_share${moebert_share_importance}"
+    fi
 
-elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
-    export model_name_or_path="/home/kimth/workspace/MoEBERT/ckpt/dense/${task_name}/model/${ckpt_name}/"
-    export run_name="${run_name}_dff${moebert_expert_dim}_share${moebert_share_importance}"
+    if [[ ${MODE} == "diffmoe" ]]; then
+        export run_name+="_alphalr${moebert_learning_rate_alpha}"
+    fi
 
 fi
 
@@ -212,6 +225,7 @@ CMD="
 if [[ ${MODE} == "dense" ]]; then
     echo "Train dense model"
     CMD+="
+            --do_train \
             --do_eval \
             --per_device_train_batch_size ${batch_size} \
             --per_device_eval_batch_size ${batch_size} \
@@ -219,18 +233,25 @@ if [[ ${MODE} == "dense" ]]; then
 
 elif [[ ${MODE} == "importance" ]]; then
     echo "Preprocess importance scores"
-    CMD+="
-            --do_eval \
-            --per_device_eval_batch_size 16 \
-            --preprocess_importance y
-        "
+    CMD+="--do_eval \
+         --per_device_eval_batch_size 16 \
+         --preprocess_importance y"
+
+    # Merge importance
+    CMD2="python merge_importance.py --num_files 1 ; \
+            mv importance.pkl importance_files/importance_${task_name}.pkl"
+
 
 elif [[ ${MODE} == "dense2moe" ]]; then
     echo "Preprocess importance scores"
+    echo "DEPRECATED : EXITING"
+    exit 1
 
     # ACTIVATE moebert_load_expert
     # DEACTIVATE moebert_distill 5.0
     CMD+="
+            --per_device_train_batch_size ${batch_size} \
+            --per_device_eval_batch_size ${batch_size} \
             --moebert_load_importance ${importance_file} \
             --moebert_load_expert True \
             --moebert moe \
@@ -247,6 +268,8 @@ elif [[ ${MODE} == "dense2moe" ]]; then
 elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
     echo "Finetune MoEBERT"
     CMD+="
+            --per_device_train_batch_size ${batch_size} \
+            --per_device_eval_batch_size ${batch_size} \
             --moebert_load_importance ${importance_file} \
             --moebert_load_expert True \
             --moebert ${MODE} \
@@ -264,6 +287,8 @@ elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
             --moebert_concrete_upper ${moebert_concrete_upper} \
             --moebert_structured ${moebert_structured} \
             --moebert_sparsity_pen ${moebert_sparsity_pen} \
+            --moebert_learning_rate_alpha ${moebert_learning_rate_alpha} \
+            --moebert_l0_loss_scale ${moebert_l0_loss_scale} \
             --do_train \
             --do_eval
         "
@@ -272,3 +297,8 @@ fi
 # RUN CMD
 echo ${CMD}
 ${CMD}
+
+if [[ ${MODE} == "importance" ]]; then
+    echo ${CMD2}
+    ${CMD2}
+fi

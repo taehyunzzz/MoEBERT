@@ -566,7 +566,7 @@ class DiffFeedForward(nn.Module):
 
     @torch.no_grad()
     def _count_non_zero_params(self, *args, **kwargs) -> Tuple[int, int, int]:
-        l = [self._count_non_zero_params_for_module(m, *args, **kwargs) for n,m in list(self.get_base_modules())]
+        l = [self._count_non_zero_params_for_module(m, *args, **kwargs) for m in list(self.get_base_modules())]
         return [sum(x) for x in list(zip(*l))]
 
     @torch.no_grad()

@@ -1585,7 +1585,12 @@ class Trainer:
 
         #################################
         # LOG TRAINING LOSS
-        self.log(self.model.log_msg)
+        if hasattr(self.model, "log_msg"):
+            self.log(self.model.log_msg)
+        else :
+            self.log({
+                "train_loss" : loss.item()
+            })
         #################################
 
         return loss.detach()
