@@ -12,7 +12,7 @@ def main():
 
     cmd_format = "bash bert_base_classification.sh {} {} {} {}"
 
-    for mode in list_mode:
+    for idx1, mode in enumerate(list_mode):
 
         # set num workers
         if mode == "importance":
@@ -21,9 +21,9 @@ def main():
             num_workers = 4
 
         commands = []
-        for idx, task_name in enumerate(list_task_name):
-            cuda_device = idx % 2
-            port_num = 9000 + idx
+        for idx2, task_name in enumerate(list_task_name):
+            cuda_device = idx2 % 2
+            port_num = 9000 + idx1 * len(list_task_name) + idx2
 
             cmd = cmd_format.format(task_name, cuda_device, port_num, mode)
             cmd_list = cmd.split(" ")
