@@ -100,7 +100,6 @@ fi
 if [[ 1 ]]; then
     # export MODE="dense"
     # export MODE="importance"
-    # export MODE="dense2moe"
     # export MODE="moe"
     export MODE="diffmoe"
 fi
@@ -145,6 +144,7 @@ if [[ 1 ]]; then
     # diff pruning params
     moebert_learning_rate_alpha=3e-2
     moebert_l0_loss_scale=1e1
+    moebert_target_sparsity=0.04
 fi
 
 ###########################################
@@ -240,30 +240,6 @@ elif [[ ${MODE} == "importance" ]]; then
     CMD2="python merge_importance.py --num_files 1"
     CMD3="mv importance.pkl importance_files/importance_${task_name}.pkl"
 
-
-elif [[ ${MODE} == "dense2moe" ]]; then
-    echo "Preprocess importance scores"
-    echo "DEPRECATED : EXITING"
-    exit 1
-
-    # ACTIVATE moebert_load_expert
-    # DEACTIVATE moebert_distill 5.0
-    CMD+="
-            --per_device_train_batch_size ${batch_size} \
-            --per_device_eval_batch_size ${batch_size} \
-            --moebert_load_importance ${importance_file} \
-            --moebert_load_expert True \
-            --moebert moe \
-            --moebert_expert_num ${moebert_expert_num} \
-            --moebert_expert_dim ${moebert_expert_dim} \
-            --moebert_expert_dropout ${moebert_expert_dropout} \
-            --moebert_load_balance ${moebert_load_balance} \
-            --moebert_route_method ${moebert_route_method} \
-            --moebert_share_importance ${moebert_share_importance} \
-            --do_train
-        "
-        # Keep do_train, but it will finish automatically after evaluation instead
-
 elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
     echo "Finetune MoEBERT"
     CMD+="
@@ -287,6 +263,7 @@ elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
             --moebert_sparsity_pen ${moebert_sparsity_pen} \
             --moebert_learning_rate_alpha ${moebert_learning_rate_alpha} \
             --moebert_l0_loss_scale ${moebert_l0_loss_scale} \
+            --moebert_target_sparsity ${moebert_target_sparsity} \
             --do_train \
             --do_eval
         "
