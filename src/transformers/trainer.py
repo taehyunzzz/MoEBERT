@@ -1585,10 +1585,8 @@ class Trainer:
 
         #################################
         # LOG TRAINING LOSS
+        self.log(self.model.log_msg)
         #################################
-        self.log({
-            "train_loss":loss.detach().item(),
-        })
 
         return loss.detach()
 

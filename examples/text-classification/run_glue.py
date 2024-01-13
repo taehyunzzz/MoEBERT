@@ -257,6 +257,10 @@ class ModelArguments:
         default=1e-3,
         metadata={"help": "Amount of neurons to share across experts."}
     )
+    moebert_l0_loss_scale : Optional[float] = field(
+        default=1e-1,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
     ###################################################################
 
     apply_lora: Optional[bool] = field(
@@ -476,6 +480,7 @@ def main():
     config.moebert_structured           = model_args.moebert_structured
     config.moebert_sparsity_pen         = model_args.moebert_sparsity_pen
     config.moebert_learning_rate_alpha  = model_args.moebert_learning_rate_alpha
+    config.moebert_l0_loss_scale        = model_args.moebert_l0_loss_scale
     ############################################################
 
 

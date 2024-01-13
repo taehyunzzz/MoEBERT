@@ -488,7 +488,7 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
             expert_attention_mask=attention_mask,
         )
 
-        distillation_loss = 0.0
+        distillation_loss = torch.tensor(0.0, device=self.device)
         if self.teacher is not None and self.training:
             teacher_outputs = self.teacher(
                 input_ids,
@@ -505,21 +505,25 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
             distillation_loss = self.get_distillation_loss(outputs, logits, teacher_outputs)
 
         ###############################################################
-        # Record scaled distillation loss
-        self.gate_loss = gate_loss * self.load_balance_alpha
-        self.distillation_loss = distillation_loss * self.distill_alpha
-
-        # Get and record diff Loss
-        self.diff_l0_loss = torch.tensor(0.0, device=self.device)
-        for n, mod in self.named_modules():
-            if mod.__class__.__name__ == "DiffFeedForward":
-                self.diff_l0_loss += mod._get_sparsity_loss()
+        # Get sparsity loss
+        diff_l0_loss = self.get_sparsity_loss()
         ###############################################################
 
         loss = loss \
                + gate_loss * self.load_balance_alpha \
                + distillation_loss * self.distill_alpha \
-               + self.diff_l0_loss
+               + diff_l0_loss * self.config.moebert_l0_loss_scale
+
+        ###############################################################
+        # Record loss
+        self.log_msg = {
+            "loss" : loss.item(),
+            "gate_loss" : gate_loss.item() * self.load_balance_alpha if (type(gate_loss) == torch.Tensor) \
+                                                                else gate_loss * self.load_balance_alpha,
+            "distillation_loss" : distillation_loss.item() * self.distill_alpha,
+            "diff_l0_loss" : diff_l0_loss.item() * self.config.moebert_l0_loss_scale,
+        }
+        ###############################################################
 
         if not return_dict:
             output = (logits,) + outputs[2:]
@@ -550,6 +554,13 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         loss = loss + prediction_loss
 
         return loss
+    
+    def get_sparsity_loss(self):
+        diff_l0_loss = torch.tensor(0.0, device=self.device)
+        for n, mod in self.named_modules():
+            if mod.__class__.__name__ == "DiffFeedForward":
+                diff_l0_loss += mod._get_sparsity_loss()
+        return diff_l0_loss
 
     def get_diffmoe_param_groups(self,trainer_args):
 
