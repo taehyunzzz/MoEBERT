@@ -263,10 +263,10 @@ elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
             --moebert_sparsity_pen ${moebert_sparsity_pen} \
             --moebert_learning_rate_alpha ${moebert_learning_rate_alpha} \
             --moebert_l0_loss_scale ${moebert_l0_loss_scale} \
-            --moebert_target_sparsity ${moebert_target_sparsity} \
             --do_train \
             --do_eval
         "
+            # --moebert_target_sparsity ${moebert_target_sparsity} \
 fi
 
 # RUN CMD
