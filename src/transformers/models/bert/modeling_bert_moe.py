@@ -403,7 +403,10 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         
         ######################################################
         # Target sparsity and early exit flag
-        self.target_sparsity = config.moebert_target_sparsity
+        self.moebert_target_sparsity = config.moebert_target_sparsity
+
+        assert (self.moebert_target_sparsity <= 1.0) and (self.moebert_target_sparsity > 0.0), \
+            "self.moebert_target_sparsity should be in range (0.0,1.0]"
         ######################################################
 
         self.bert = MoEBertModel(config)
@@ -523,7 +526,10 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         # Log results
         n_p, n_p_zero, n_p_one = self.count_non_zero_params()
         n_p_mid = n_p - n_p_zero - n_p_one
-        sparsity = int(n_p_zero / (n_p + 1e-8) * 10000.0) / 100.0,
+        n_p_nonzero = n_p - n_p_zero
+
+        # sparsity in percent : ratio of non-zero params
+        sparsity = n_p_nonzero / (n_p + 1e-8)
 
         self.log_msg = {
             # Loss
@@ -542,8 +548,8 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         }
         
         # Move to fixed-mask finetuning when reaching target sparsity
-        if self.target_sparsity <= sparsity:
-            self.convert_diffmodel_to_fixmask(pct = self.target_sparsity)
+        if self.moebert_target_sparsity >= sparsity:
+            self.convert_diffmodel_to_fixmask(pct = self.moebert_target_sparsity)
 
         ###############################################################
 
@@ -665,7 +671,7 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
 
         return param_groups
 
-    def convert_diffmodel_to_fixmask(self, pct=0.02):
+    def convert_diffmodel_to_fixmask(self, pct):
         for n, mod in self.named_modules():
             if mod.__class__.__name__ == "DiffFeedForward":
                 mod._finetune_to_fixmask(

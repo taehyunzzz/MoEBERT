@@ -95,6 +95,7 @@ if [[ 1 ]]; then
         export num_train_epochs=10
         export weight_decay=0.00
         export moebert_distill=1.0
+        export ckpt_name="checkpoint-5600"
 
         export eval_steps=$(( ${eval_steps} * 4 ))
         export save_steps=$(( ${save_steps} * 4 ))
