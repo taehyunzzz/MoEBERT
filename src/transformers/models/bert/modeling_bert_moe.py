@@ -400,6 +400,11 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         self.teacher = None
         self.load_balance_alpha = config.moebert_load_balance
         self.distill_alpha = config.moebert_distill
+        
+        ######################################################
+        # Target sparsity and early exit flag
+        self.target_sparsity = config.moebert_target_sparsity
+        ######################################################
 
         self.bert = MoEBertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -518,6 +523,7 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         # Log results
         n_p, n_p_zero, n_p_one = self.count_non_zero_params()
         n_p_mid = n_p - n_p_zero - n_p_one
+        sparsity = int(n_p_zero / (n_p + 1e-8) * 10000.0) / 100.0,
 
         self.log_msg = {
             # Loss
@@ -532,8 +538,13 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
             "n_p_zero" : n_p_zero,
             "n_p_mid" : n_p_mid,
             "n_p_one" : n_p_one,
-            "sparsity" : int(n_p_zero / (n_p + 1e-8) * 10000.0) / 100.0,
+            "sparsity" : sparsity,
         }
+        
+        # Move to fixed-mask finetuning when reaching target sparsity
+        if self.target_sparsity <= sparsity:
+            self.convert_diffmodel_to_fixmask(pct = self.target_sparsity)
+
         ###############################################################
 
         if not return_dict:

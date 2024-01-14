@@ -223,6 +223,7 @@ class ModelArguments:
         metadata={"help": "Amount of neurons to share across experts."}
     )
 
+
     ###################################################################
     # DiffMoE Params
     moebert_fixmask_init: Optional[bool] = field(
@@ -257,7 +258,12 @@ class ModelArguments:
         default=1e-1,
         metadata={"help": "Amount of neurons to share across experts."}
     )
+    moebert_target_sparsity: Optional[float] = field(
+        default=0.95,
+        metadata={"help": "Amount of neurons to share across experts."}
+    )
     ###################################################################
+
 
     apply_lora: Optional[bool] = field(
         default=False,
@@ -465,7 +471,6 @@ def main():
     config.moebert_route_method = model_args.moebert_route_method
     config.moebert_share_importance = model_args.moebert_share_importance
 
-
     ############################################################
     # DiffMoE arguments
     config.moebert_fixmask_init         = model_args.moebert_fixmask_init
@@ -476,6 +481,7 @@ def main():
     config.moebert_sparsity_pen         = model_args.moebert_sparsity_pen
     config.moebert_learning_rate_alpha  = model_args.moebert_learning_rate_alpha
     config.moebert_l0_loss_scale        = model_args.moebert_l0_loss_scale
+    config.moebert_target_sparsity      = model_args.moebert_target_sparsity
     ############################################################
 
 

@@ -19,7 +19,7 @@ export PYTHONHASHSEED=0
 ###########################################
 # FIXME : TRAINER
 ###########################################
-export num_workers=8
+export num_workers=4
 export lr_scheduler_type="linear"
 
 export gradient_accumulation_steps=1
