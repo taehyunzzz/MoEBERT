@@ -7,8 +7,20 @@ def run_bash_script(cmd):
     subprocess.run(args=cmd, cwd=cwd)
 
 def main():
-    list_task_name = ["cola", "mnli", "mrpc", "qnli", "sst2"]
-    list_mode = ["dense", "importance", "moe"]
+    list_mode = [
+        # "dense",
+        # "importance",
+        "moe"
+    ]
+    list_task_name = [
+        "rte",
+        # "cola",
+        # "mrpc",
+        # "sst2",
+        # "qnli",
+        # "mnli",
+        # "qqp",
+        ]
 
     cmd_format = "bash bert_base_classification.sh {} {} {} {}"
 
@@ -23,7 +35,8 @@ def main():
         commands = []
         for idx2, task_name in enumerate(list_task_name):
             cuda_device = idx2 % 2
-            port_num = 9000 + idx1 * len(list_task_name) + idx2
+            # cuda_device = 1
+            port_num = 9200 + idx1 * len(list_task_name) + idx2
 
             cmd = cmd_format.format(task_name, cuda_device, port_num, mode)
             cmd_list = cmd.split(" ")

@@ -654,6 +654,15 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
 
         return param_groups
 
+    def convert_diffmodel_to_fixmask(self, pct=0.02):
+        for n, mod in self.named_modules():
+            if mod.__class__.__name__ == "DiffFeedForward":
+                mod._finetune_to_fixmask(
+                    pct=pct,
+                )
+
+
+
 class MoEBertForQuestionAnswering(BertPreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
     _keys_to_ignore_on_save = []

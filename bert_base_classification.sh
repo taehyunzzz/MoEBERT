@@ -27,8 +27,8 @@ export warmup_steps=100
 export max_seq_length=256
 
 export logging_steps=0
-export eval_steps=50
-export save_steps=50
+export eval_steps=100
+export save_steps=100
 export save_total_limit=3
 
 export WANDB_ENTITY="taehyunzzz"
@@ -38,42 +38,7 @@ export WANDB_PROJECT="diffmoebert"
 # FIXME : TASK (set as arg)
 ###########################################
 if [[ 1 ]]; then
-    if [[ ${task_name} == "cola" ]]; then
-        export learning_rate="2e-5"
-        export batch_size=8
-        export num_train_epochs=10
-        export weight_decay=0.0
-        export moebert_distill=3.0
-
-    elif [[ ${task_name} == "mnli" ]]; then
-        export learning_rate="5e-5"
-        export batch_size=64
-        export num_train_epochs=5
-        export weight_decay=0.00
-        export moebert_distill=5.0
-
-    elif [[ ${task_name} == "mrpc" ]]; then
-        export learning_rate="3e-5"
-        export batch_size=8
-        export num_train_epochs=5
-        export weight_decay=0.0
-        export moebert_distill=2.0
-
-    elif [[ ${task_name} == "qnli" ]]; then
-        export learning_rate="1e-5"
-        export batch_size=32
-        export num_train_epochs=5
-        export weight_decay=0.00
-        export moebert_distill=2.0
-
-    elif [[ ${task_name} == "qqp" ]]; then
-        export learning_rate="3e-5"
-        export batch_size=64
-        export num_train_epochs=5
-        export weight_decay=0.00
-        export moebert_distill=1.0
-
-    elif [[ ${task_name} == "rte" ]]; then
+    if [[ ${task_name} == "rte" ]]; then
         export learning_rate="1e-5"
         export batch_size=16
         export num_train_epochs=10
@@ -81,12 +46,58 @@ if [[ 1 ]]; then
         export moebert_distill=1.0
         export ckpt_name="checkpoint-1550"
 
+    elif [[ ${task_name} == "cola" ]]; then
+        export learning_rate="2e-5"
+        export batch_size=16
+        export num_train_epochs=20
+        export weight_decay=0.0
+        export moebert_distill=3.0
+        export ckpt_name="checkpoint-10700"
+
+    elif [[ ${task_name} == "mrpc" ]]; then
+        export learning_rate="3e-5"
+        export batch_size=16
+        export num_train_epochs=10
+        export weight_decay=0.0
+        export moebert_distill=2.0
+        export ckpt_name="checkpoint-2300"
+
     elif [[ ${task_name} == "sst2" ]]; then
         export learning_rate="2e-5"
         export batch_size=16
         export num_train_epochs=5
         export weight_decay=0.0
         export moebert_distill=1.0
+        export ckpt_name="checkpoint-21050"
+
+    elif [[ ${task_name} == "qnli" ]]; then
+        export learning_rate="1e-5"
+        export batch_size=32
+        export num_train_epochs=10
+        export weight_decay=0.00
+        export moebert_distill=2.0
+        export ckpt_name="checkpoint-32650"
+
+    elif [[ ${task_name} == "mnli" ]]; then
+        export learning_rate="5e-5"
+        export batch_size=64
+        export num_train_epochs=10
+        export weight_decay=0.00
+        export moebert_distill=5.0
+        export ckpt_name="checkpoint-61350"
+
+        export eval_steps=$(( ${eval_steps} * 4 ))
+        export save_steps=$(( ${save_steps} * 4 ))
+
+    elif [[ ${task_name} == "qqp" ]]; then
+        export learning_rate="3e-5"
+        export batch_size=64
+        export num_train_epochs=10
+        export weight_decay=0.00
+        export moebert_distill=1.0
+
+        export eval_steps=$(( ${eval_steps} * 4 ))
+        export save_steps=$(( ${save_steps} * 4 ))
 
     else
         echo "Wrong task ${task_name}. Running MNLI"
@@ -111,10 +122,7 @@ if [[ 1 ]]; then
     export MODE=${mode}
 fi
 
-if [[ ${MODE} == "moe" ]]; then
-    export num_train_epochs=$(( ${num_train_epochs} * 2 ))
-    echo "Increasing training epochs to ${num_train_epochs}"
-elif [[ ${MODE} == "diffmoe" ]]; then
+if [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
     export num_train_epochs=$(( ${num_train_epochs} * 3 ))
     echo "Increasing training epochs to ${num_train_epochs}"
 fi
