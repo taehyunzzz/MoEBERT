@@ -9,17 +9,17 @@ def run_bash_script(cmd):
 def main():
     list_mode = [
         # "dense",
-        # "importance",
+        "importance",
         # "moe",
-        "diffmoe"
+        # "diffmoe"
     ]
     list_task_name = [
         # "rte",
-        "cola",
+        # "cola",
         # "mrpc",
         # "sst2",
         # "qnli",
-        # "mnli",
+        "mnli",
         # "qqp",
         ]
 
@@ -31,13 +31,13 @@ def main():
         if mode == "importance":
             num_workers = 1
         else:
-            num_workers = 2
+            num_workers = 3
 
         commands = []
         for idx2, task_name in enumerate(list_task_name):
             # cuda_device = idx2 % 2
-            cuda_device = 1
-            port_num = 8200 + idx1 * len(list_task_name) + idx2
+            cuda_device = 0
+            port_num = 8270 + idx1 * len(list_task_name) + idx2
 
             cmd = cmd_format.format(task_name, cuda_device, port_num, mode)
             cmd_list = cmd.split(" ")

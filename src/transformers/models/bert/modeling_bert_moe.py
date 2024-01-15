@@ -404,6 +404,11 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         ######################################################
         # Target sparsity and early exit flag
         self.moebert_target_sparsity = config.moebert_target_sparsity
+        
+        if self.config.moebert_fixmask_init:
+            self.diff_model_state = "FIXMASK"
+        else :
+            self.diff_model_state = "FINETUNING"
 
         assert (self.moebert_target_sparsity <= 1.0) and (self.moebert_target_sparsity > 0.0), \
             "self.moebert_target_sparsity should be in range (0.0,1.0]"
@@ -548,8 +553,9 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         }
         
         # Move to fixed-mask finetuning when reaching target sparsity
-        if self.moebert_target_sparsity >= sparsity:
+        if (self.moebert_target_sparsity >= sparsity) and (self.diff_model_state == "FINETUNING"):
             self.convert_diffmodel_to_fixmask(pct = self.moebert_target_sparsity)
+            self.diff_model_state = "FIXMASK"
 
         ###############################################################
 
@@ -585,7 +591,7 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
     
     def count_non_zero_params(self):
         n_p, n_p_zero, n_p_one = 0, 0, 0
-        for n, mod in self.named_modules():
+        for n, mod in list(self.named_modules()):
             if mod.__class__.__name__ == "DiffFeedForward":
                 a,b,c = mod._count_non_zero_params()
                 n_p += a
@@ -595,7 +601,7 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
 
     def get_sparsity_loss(self):
         diff_l0_loss = torch.tensor(0.0, device=self.device)
-        for n, mod in self.named_modules():
+        for n, mod in list(self.named_modules()):
             if mod.__class__.__name__ == "DiffFeedForward":
                 diff_l0_loss += mod._get_sparsity_loss()
         return diff_l0_loss
@@ -672,13 +678,14 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         return param_groups
 
     def convert_diffmodel_to_fixmask(self, pct):
-        for n, mod in self.named_modules():
+        print("Beginning fixed-mask finetuning")
+        for n, mod in list(self.named_modules()):
             if mod.__class__.__name__ == "DiffFeedForward":
                 mod._finetune_to_fixmask(
                     pct=pct,
                 )
 
-
+        # Re-initialize optimizer
 
 class MoEBertForQuestionAnswering(BertPreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler"]

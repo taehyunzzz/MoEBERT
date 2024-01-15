@@ -259,7 +259,7 @@ class ModelArguments:
         metadata={"help": "Amount of neurons to share across experts."}
     )
     moebert_target_sparsity: Optional[float] = field(
-        default=0.999,
+        default=0.03,
         metadata={"help": "Sparsity in percent (e.g., 98% zero -> 1 - 0.98 = 0.02)"}
     )
     ###################################################################

@@ -158,9 +158,9 @@ if [[ 1 ]]; then
     moebert_sparsity_pen=1.25e-7
     
     # diff pruning params
-    moebert_learning_rate_alpha=3e-2
+    moebert_learning_rate_alpha=2e-2
     moebert_l0_loss_scale=1e1
-    moebert_target_sparsity=0.04
+    moebert_target_sparsity=3e-2
 fi
 
 ###########################################
@@ -188,7 +188,7 @@ else
     fi
 
     if [[ ${MODE} == "diffmoe" ]]; then
-        export run_name+="_alphalr${moebert_learning_rate_alpha}"
+        export run_name+="_alphalr${moebert_learning_rate_alpha}_sparsity${moebert_target_sparsity}"
     fi
 
 fi
@@ -279,10 +279,10 @@ elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
             --moebert_sparsity_pen ${moebert_sparsity_pen} \
             --moebert_learning_rate_alpha ${moebert_learning_rate_alpha} \
             --moebert_l0_loss_scale ${moebert_l0_loss_scale} \
+            --moebert_target_sparsity ${moebert_target_sparsity} \
             --do_train \
             --do_eval
         "
-            # --moebert_target_sparsity ${moebert_target_sparsity} \
 fi
 
 # RUN CMD

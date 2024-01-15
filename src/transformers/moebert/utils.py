@@ -323,7 +323,7 @@ class DiffFeedForward(nn.Module):
 
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(dropout)
-        self.model_state = "BASE" # (BASE, FINETUNING, FIXMASK)
+        self.model_state = "FINETUNING" # (FINETUNING, FIXMASK, TASK)
 
     def _add_diff_parametrizations(self):
         # Apply diff parametrization to shared submatrices
@@ -387,14 +387,18 @@ class DiffFeedForward(nn.Module):
         return [(n,m) if return_names else m for n,m in self.named_modules() if check_fn(m)]
 
     def _get_sparsity_loss(self, idx: int = 0) -> torch.Tensor:
-        assert self.finetune_state, "model needs to be in finetuning state"
+
         l0_pen = 0.
-        for base_module in self.get_base_modules():
-            module_pen = 0.
-            for n, par_list in list(base_module.parametrizations.items()):
-                for a in par_list[idx].alpha_weights:
-                    module_pen += self.get_l0_norm_term(a, self.get_log_ratio())
-            l0_pen += (module_pen * self.sparsity_pen)
+        
+        # Return only for stage-1 finetuning
+        if self.finetune_state:
+            for base_module in self.get_base_modules():
+                module_pen = 0.
+                for n, par_list in list(base_module.parametrizations.items()):
+                    for a in par_list[idx].alpha_weights:
+                        module_pen += self.get_l0_norm_term(a, self.get_log_ratio())
+                l0_pen += (module_pen * self.sparsity_pen)
+
         return l0_pen
 
     def _parametrizations_fn(self, fn: Callable, idx: Optional[int] = None):
@@ -418,7 +422,7 @@ class DiffFeedForward(nn.Module):
 
     def _remove_parametrizations(self, leave_parametrized: bool = True) -> None:
         self._freeze_parametrizations(True)
-        self.model_state = "BASE"
+        self.model_state = "TASK"
         for module in list(self.get_base_modules()):
             try:
                 for n in list(module.parametrizations):
@@ -445,7 +449,7 @@ class DiffFeedForward(nn.Module):
             if abs: values = torch.abs(values)
             return torch.topk(values, k+1, largest=True, sorted=True)[0][-1]
 
-        assert self.model_state == "FINETUNING", "model needs to be in finetuning state"
+        assert self.model_state == "FINETUNING", "model needs to be in finetuning state, currently {}".format(self.model_state)
 
         with self.deterministic():
 

@@ -997,7 +997,6 @@ class Trainer:
         if delay_optimizer_creation:
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
 
-
         ###################################################
         # DEBUG: CONVERT DENSE TO MOE, SAVE, AND EXIT
         ###################################################
@@ -1060,7 +1059,7 @@ class Trainer:
         steps_trained_in_current_epoch = 0
 
         # Check if continuing training from a checkpoint
-        if resume_from_checkpoint is not None and os.path.isfile(
+        if (resume_from_checkpoint is not None) and os.path.isfile(
             os.path.join(resume_from_checkpoint, "trainer_state.json")
         ):
             self.state = TrainerState.load_from_json(os.path.join(resume_from_checkpoint, "trainer_state.json"))
@@ -1144,6 +1143,11 @@ class Trainer:
                 if (step + 1) % self.args.gradient_accumulation_steps == 0:
                     self.control = self.callback_handler.on_step_begin(self.args, self.state, self.control)
 
+                ################################################
+                # Check model_state before forward 
+                diff_model_state_before = model.diff_model_state
+                ################################################
+
                 if (
                     ((step + 1) % self.args.gradient_accumulation_steps != 0)
                     and self.args.local_rank != -1
@@ -1155,6 +1159,19 @@ class Trainer:
                 else:
                     tr_loss += self.training_step(model, inputs)
                 self._total_flos += float(self.floating_point_ops(inputs))
+
+                ################################################
+                # Check model_state after forward 
+                diff_model_state_after = model.diff_model_state
+
+                # Re-initialize optimizer after converting to FIXMASK diff model
+                if (diff_model_state_before == "FINETUNING") and \
+                    (diff_model_state_after == "FIXMASK"):
+
+                    self.optimizer = self.create_diffmoe_optimizer()
+                    self.lr_scheduler.optimizer = self.optimizer
+
+                ################################################
 
                 # Optimizer step for deepspeed must be called on every step regardless of the value of gradient_accumulation_steps
                 if self.deepspeed:
