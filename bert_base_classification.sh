@@ -4,6 +4,10 @@ task_name=$1
 cuda_device=$2
 port_num=$3
 mode=$4
+moebert_expert_num=$5
+moebert_expert_dim=$6
+moebert_share_importance=$7
+moebert_target_sparsity=$8
 
 export CUDA_VISIBLE_DEVICES=${cuda_device}
 export MASTER_ADDR=localhost
@@ -32,83 +36,83 @@ export save_steps=100
 export save_total_limit=3
 
 export WANDB_ENTITY="taehyunzzz"
-export WANDB_PROJECT="diffmoebert"
+export WANDB_PROJECT="diffmoebert-ablation"
 
 ###########################################
 # FIXME : TASK (set as arg)
 ###########################################
 if [[ 1 ]]; then
-    if [[ ${task_name} == "rte" ]]; then
-        export learning_rate="1e-5"
-        export batch_size=16
-        export num_train_epochs=10
-        export weight_decay=0.01
-        export moebert_distill=1.0
-        export ckpt_name="checkpoint-1550"
+if [[ ${task_name} == "rte" ]]; then
+    export learning_rate="1e-5"
+    export batch_size=16
+    export num_train_epochs=10
+    export weight_decay=0.01
+    export moebert_distill=1.0
+    export ckpt_name="checkpoint-1550"
 
-    elif [[ ${task_name} == "cola" ]]; then
-        export learning_rate="2e-5"
-        export batch_size=16
-        export num_train_epochs=20
-        export weight_decay=0.0
-        export moebert_distill=3.0
-        export ckpt_name="checkpoint-10700"
+elif [[ ${task_name} == "cola" ]]; then
+    export learning_rate="2e-5"
+    export batch_size=16
+    export num_train_epochs=20
+    export weight_decay=0.0
+    export moebert_distill=3.0
+    export ckpt_name="checkpoint-10700"
 
-    elif [[ ${task_name} == "mrpc" ]]; then
-        export learning_rate="3e-5"
-        export batch_size=16
-        export num_train_epochs=10
-        export weight_decay=0.0
-        export moebert_distill=2.0
-        export ckpt_name="checkpoint-2300"
+elif [[ ${task_name} == "mrpc" ]]; then
+    export learning_rate="3e-5"
+    export batch_size=16
+    export num_train_epochs=10
+    export weight_decay=0.0
+    export moebert_distill=2.0
+    export ckpt_name="checkpoint-2300"
 
-    elif [[ ${task_name} == "sst2" ]]; then
-        export learning_rate="2e-5"
-        export batch_size=16
-        export num_train_epochs=5
-        export weight_decay=0.0
-        export moebert_distill=1.0
-        export ckpt_name="checkpoint-21050"
+elif [[ ${task_name} == "sst2" ]]; then
+    export learning_rate="2e-5"
+    export batch_size=16
+    export num_train_epochs=5
+    export weight_decay=0.0
+    export moebert_distill=1.0
+    export ckpt_name="checkpoint-21050"
 
-    elif [[ ${task_name} == "qnli" ]]; then
-        export learning_rate="1e-5"
-        export batch_size=32
-        export num_train_epochs=10
-        export weight_decay=0.00
-        export moebert_distill=2.0
-        export ckpt_name="checkpoint-32650"
+elif [[ ${task_name} == "qnli" ]]; then
+    export learning_rate="1e-5"
+    export batch_size=32
+    export num_train_epochs=10
+    export weight_decay=0.00
+    export moebert_distill=2.0
+    export ckpt_name="checkpoint-32650"
 
-    elif [[ ${task_name} == "mnli" ]]; then
-        export learning_rate="5e-5"
-        export batch_size=64
-        export num_train_epochs=10
-        export weight_decay=0.00
-        export moebert_distill=5.0
-        export ckpt_name="checkpoint-61350"
+elif [[ ${task_name} == "mnli" ]]; then
+    export learning_rate="5e-5"
+    export batch_size=64
+    export num_train_epochs=10
+    export weight_decay=0.00
+    export moebert_distill=5.0
+    export ckpt_name="checkpoint-61350"
 
-        export eval_steps=$(( ${eval_steps} * 4 ))
-        export save_steps=$(( ${save_steps} * 4 ))
+    export eval_steps=$(( ${eval_steps} * 4 ))
+    export save_steps=$(( ${save_steps} * 4 ))
 
-    elif [[ ${task_name} == "qqp" ]]; then
-        export learning_rate="3e-5"
-        export batch_size=64
-        export num_train_epochs=10
-        export weight_decay=0.00
-        export moebert_distill=1.0
-        export ckpt_name="checkpoint-5600"
+elif [[ ${task_name} == "qqp" ]]; then
+    export learning_rate="3e-5"
+    export batch_size=64
+    export num_train_epochs=10
+    export weight_decay=0.00
+    export moebert_distill=1.0
+    export ckpt_name="checkpoint-5600"
 
-        export eval_steps=$(( ${eval_steps} * 4 ))
-        export save_steps=$(( ${save_steps} * 4 ))
+    export eval_steps=$(( ${eval_steps} * 4 ))
+    export save_steps=$(( ${save_steps} * 4 ))
 
-    else
-        echo "Wrong task ${task_name}. Running MNLI"
-        export learning_rate="5e-5"
-        export batch_size=64
-        export num_train_epochs=5
-        export weight_decay=0.00
-        export moebert_distill=5.0
+else
+    echo "Wrong task ${task_name}. Running MNLI"
+    export learning_rate="5e-5"
+    export batch_size=64
+    export num_train_epochs=5
+    export weight_decay=0.00
+    export moebert_distill=5.0
 
-    fi
+fi
 fi
 
 
@@ -116,16 +120,16 @@ fi
 # FIXME : MODE
 ###########################################
 if [[ 1 ]]; then
-    # export MODE="dense"
-    # export MODE="importance"
-    # export MODE="moe"
-    # export MODE="diffmoe"
-    export MODE=${mode}
+# export MODE="dense"
+# export MODE="importance"
+# export MODE="moe"
+# export MODE="diffmoe"
+export MODE=${mode}
 fi
 
 if [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
-    export num_train_epochs=$(( ${num_train_epochs} * 3 ))
-    echo "Increasing training epochs to ${num_train_epochs}"
+export num_train_epochs=$(( ${num_train_epochs} * 3 ))
+echo "Increasing training epochs to ${num_train_epochs}"
 fi
 
 
@@ -133,17 +137,17 @@ fi
 # FIXME : MOE CONFIG
 ###########################################
 if [[ 1 ]]; then
-    random_seed=0
-    moebert_expert_num=4
+random_seed=0
+# moebert_expert_num=16
 
     # moebert_expert_dim=768
     # moebert_expert_dim=1024
     # moebert_expert_dim=2048
-    moebert_expert_dim=3072
+    # moebert_expert_dim=3072
 
     # moebert_share_importance=768
     # moebert_share_importance=1024
-    moebert_share_importance=2048
+    # moebert_share_importance=2048
     # moebert_share_importance=3072
 
     moebert_expert_dropout=0.1
@@ -158,9 +162,9 @@ if [[ 1 ]]; then
     moebert_sparsity_pen=1.25e-7
     
     # diff pruning params
-    moebert_learning_rate_alpha=2e-2
+    moebert_learning_rate_alpha=1e-2
     moebert_l0_loss_scale=1e1
-    moebert_target_sparsity=3e-2
+    # moebert_target_sparsity=3e-2
 fi
 
 ###########################################
