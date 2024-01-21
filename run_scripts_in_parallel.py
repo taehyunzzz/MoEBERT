@@ -11,7 +11,7 @@ def main():
         # "dense",
         # "importance",
         "moe",
-        # "diffmoe"
+        "diffmoe"
     ]
     list_task_name = [
         "rte",
@@ -23,30 +23,44 @@ def main():
         # "qqp",
         ]
 
-    list_moebert_expert_num=[4,8,16]
-    list_moebert_expert_dim=[3072]
-    list_moebert_share_importance=[1024,2048,3072]
-    list_moebert_target_sparsity=[0.1, 0.05, 0.01, 0.001]
+    list_moebert_expert_num=[
+        4,
+        8,
+        16
+    ]
+    list_moebert_expert_dim=[
+        3072
+    ]
+    list_moebert_share_importance=[
+        1024,
+        2048,
+        3072
+    ]
+    list_moebert_target_sparsity=[
+        0.1,
+        0.05,
+        0.01,
+    ]
 
     cmd_format = "bash bert_base_classification.sh {} {} {} {} {} {} {} {}"
 
     run_id = 0
     for idx1, mode in enumerate(list_mode):
-        for moebert_expert_num in list_moebert_expert_num:
-            for moebert_expert_dim in list_moebert_expert_dim:
-                for moebert_share_importance in list_moebert_share_importance:
-                    for moebert_target_sparsity in list_moebert_target_sparsity:
 
-                        # set num workers
-                        if mode == "importance":
-                            num_workers = 1
-                        else:
-                            num_workers = 4
+        # set num workers
+        if mode == "importance":
+            num_workers = 1
+        else:
+            num_workers = 2
 
-                        commands = []
-                        for idx2, task_name in enumerate(list_task_name):
+        for idx2, task_name in enumerate(list_task_name):
+            commands = []
+            for moebert_expert_num in list_moebert_expert_num:
+                for moebert_expert_dim in list_moebert_expert_dim:
+                    for moebert_share_importance in list_moebert_share_importance:
+                        for moebert_target_sparsity in list_moebert_target_sparsity:
 
-                            cuda_device = idx2 % 2
+                            cuda_device = run_id % 2
                             # cuda_device = 1
 
                             port_num = 8000 + run_id
@@ -64,6 +78,10 @@ def main():
                             )
                             cmd_list = cmd.split(" ")
                             commands.append(cmd_list)
+
+                            # Run this loop only once if not diffmoe
+                            if mode != "diffmoe" :
+                                break
 
         # Run commands in parallel
         with multiprocessing.Pool(processes=num_workers) as pool:

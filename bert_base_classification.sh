@@ -16,7 +16,6 @@ export RANK=0
 export LOCAL_RANK=0
 export WORLD_SIZE=1
 
-export num_gpus=1
 export CUBLAS_WORKSPACE_CONFIG=":16:8" # https://docs.nvidia.com/cuda/cublas/index.html#cublasApi_reproducibility
 export PYTHONHASHSEED=0
 
@@ -33,7 +32,7 @@ export max_seq_length=256
 export logging_steps=0
 export eval_steps=100
 export save_steps=100
-export save_total_limit=3
+export save_total_limit=1
 
 export WANDB_ENTITY="taehyunzzz"
 export WANDB_PROJECT="diffmoebert-ablation"
@@ -206,7 +205,6 @@ export importance_file=importance_files/importance_${task_name}.pkl
 
 # -m \
 # torch.distributed.launch \
-# --nproc_per_node=$num_gpus \
 CMD="
     python \
     examples/text-classification/run_glue.py \
