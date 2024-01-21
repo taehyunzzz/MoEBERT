@@ -4,6 +4,7 @@ import multiprocessing
 cwd = "/home/kimth/workspace/MoEBERT"
 
 def run_bash_script(cmd):
+    print("Run {}".format(cmd))
     subprocess.run(args=cmd, cwd=cwd)
 
 def main():
@@ -61,7 +62,9 @@ def main():
                         for moebert_target_sparsity in list_moebert_target_sparsity:
 
                             cuda_device = run_id % 2
-                            # cuda_device = 1
+                            #cuda_device = 1
+
+                            # print("Running in CUDA{}".format(cuda_device))
 
                             port_num = 8000 + run_id
                             run_id += 1
@@ -78,14 +81,18 @@ def main():
                             )
                             cmd_list = cmd.split(" ")
                             commands.append(cmd_list)
+                            #commands.append(cmd)
 
                             # Run this loop only once if not diffmoe
                             if mode != "diffmoe" :
                                 break
 
-        # Run commands in parallel
-        with multiprocessing.Pool(processes=num_workers) as pool:
-            pool.map(run_bash_script, commands)
+            # Run commands in parallel
+            with multiprocessing.Pool(processes=num_workers) as pool:
+                pool.map(run_bash_script, commands, chunksize=1)
+                #res = pool.imap(run_bash_script, commands)
+            #[print(commands)
+
 
 if __name__ == "__main__":
     main()

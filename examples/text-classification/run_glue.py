@@ -262,6 +262,10 @@ class ModelArguments:
         default=0.03,
         metadata={"help": "Sparsity in percent (e.g., 98% zero -> 1 - 0.98 = 0.02)"}
     )
+    moebert_device: Optional[int] = field(
+        default=0,
+        metadata={"help": "Sparsity in percent (e.g., 98% zero -> 1 - 0.98 = 0.02)"}
+    )
     ###################################################################
 
 
@@ -460,6 +464,7 @@ def main():
     config.moebert = model_args.moebert
     if config.moebert is not None:
         config.moebert = config.moebert.lower()
+
     config.moebert_distill = model_args.moebert_distill
     config.moebert_expert_dim = model_args.moebert_expert_dim
     config.moebert_expert_dropout = model_args.moebert_expert_dropout
@@ -482,6 +487,12 @@ def main():
     config.moebert_learning_rate_alpha  = model_args.moebert_learning_rate_alpha
     config.moebert_l0_loss_scale        = model_args.moebert_l0_loss_scale
     config.moebert_target_sparsity      = model_args.moebert_target_sparsity
+    config.moebert_device               = model_args.moebert_device
+
+    # Set device ordinal
+    print("Setting device ordinal to {}".format(config.moebert_device))
+    #torch.cuda.set_device(config.moebert_device)
+
     ############################################################
 
 
@@ -508,7 +519,7 @@ def main():
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
-    )
+    )#.to("cuda:{}".format(config.moebert_device))
     
     if config.moebert_distill > 0:
         teacher = AutoModelForSequenceClassification.from_pretrained(
@@ -518,7 +529,8 @@ def main():
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
-        )
+        )#.to("cuda:{}".format(config.moebert_device))
+
         for param in teacher.parameters():
             param.requires_grad = False
         model.teacher = teacher

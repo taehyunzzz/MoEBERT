@@ -9,7 +9,6 @@ moebert_expert_dim=$6
 moebert_share_importance=$7
 moebert_target_sparsity=$8
 
-export CUDA_VISIBLE_DEVICES=${cuda_device}
 export MASTER_ADDR=localhost
 export MASTER_PORT=${port_num}
 export RANK=0
@@ -237,6 +236,8 @@ CMD="
     --seed ${random_seed} \
     --weight_decay ${weight_decay} \
     --fp16 \
+
+    --moebert_device ${cuda_device} \
 "
 
 if [[ ${MODE} == "dense" ]]; then

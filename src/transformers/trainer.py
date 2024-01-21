@@ -1145,7 +1145,8 @@ class Trainer:
 
                 ################################################
                 # Check model_state before forward 
-                diff_model_state_before = model.diff_model_state
+                if self.model.config.moebert == "diffmoe":
+                    diff_model_state_before = model.diff_model_state
                 ################################################
 
                 if (
@@ -1161,15 +1162,16 @@ class Trainer:
                 self._total_flos += float(self.floating_point_ops(inputs))
 
                 ################################################
-                # Check model_state after forward 
-                diff_model_state_after = model.diff_model_state
+                if self.model.config.moebert == "diffmoe":
+                    # Check model_state after forward 
+                    diff_model_state_after = model.diff_model_state
 
-                # Re-initialize optimizer after converting to FIXMASK diff model
-                if (diff_model_state_before == "FINETUNING") and \
-                    (diff_model_state_after == "FIXMASK"):
+                    # Re-initialize optimizer after converting to FIXMASK diff model
+                    if (diff_model_state_before == "FINETUNING") and \
+                        (diff_model_state_after == "FIXMASK"):
 
-                    self.optimizer = self.create_diffmoe_optimizer()
-                    self.lr_scheduler.optimizer = self.optimizer
+                        self.optimizer = self.create_diffmoe_optimizer()
+                        self.lr_scheduler.optimizer = self.optimizer
 
                 ################################################
 
