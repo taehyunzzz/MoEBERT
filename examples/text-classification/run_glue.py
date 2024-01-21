@@ -695,11 +695,11 @@ def main():
     else:
         data_collator = None
 
-    torch.distributed.init_process_group(
-        backend="nccl",
-        world_size=1,
-        rank=0,
-    )
+    #torch.distributed.init_process_group(
+    #    backend="nccl",
+    #    world_size=1,
+    #    rank=0,
+    #)
 
     # Initialize our Trainer
     trainer = Trainer(

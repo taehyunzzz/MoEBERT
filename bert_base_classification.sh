@@ -126,7 +126,7 @@ export MODE=${mode}
 fi
 
 if [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
-export num_train_epochs=$(( ${num_train_epochs} * 3 ))
+export num_train_epochs=$(( ${num_train_epochs} * 5 ))
 echo "Increasing training epochs to ${num_train_epochs}"
 fi
 
@@ -169,7 +169,6 @@ fi
 # FIXME : CHECKPOINT
 ###########################################
 
-export output_dir="ckpt/${MODE}/${task_name}"
 export run_name="${task_name}_${MODE}_ba${batch_size}_${lr_scheduler_type}"
 
 if [[ ${MODE} == "dense" ]]; then
@@ -195,6 +194,7 @@ else
 
 fi
 
+export output_dir="ckpt/${MODE}/${run_name}"
 mkdir -p ${output_dir}
 mkdir -p ${output_dir}/model
 mkdir -p ${output_dir}/log
@@ -237,6 +237,7 @@ CMD="
     --weight_decay ${weight_decay} \
     --fp16 \
 
+    --local_rank ${cuda_device} \
     --moebert_device ${cuda_device} \
 "
 
