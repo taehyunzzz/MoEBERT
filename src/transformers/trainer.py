@@ -1146,7 +1146,10 @@ class Trainer:
                 ################################################
                 # Check model_state before forward 
                 if self.model.config.moebert == "diffmoe":
-                    diff_model_state_before = model.diff_model_state
+                    if hasattr(model, "diff_model_state"):
+                        diff_model_state_before = model.diff_model_state
+                    else :
+                        diff_model_state_before = model.module.diff_model_state
                 ################################################
 
                 if (
@@ -1163,8 +1166,12 @@ class Trainer:
 
                 ################################################
                 if self.model.config.moebert == "diffmoe":
+
                     # Check model_state after forward 
-                    diff_model_state_after = model.diff_model_state
+                    if hasattr(model, "diff_model_state"):
+                        diff_model_state_after = model.diff_model_state
+                    else :
+                        diff_model_state_after = model.module.diff_model_state
 
                     # Re-initialize optimizer after converting to FIXMASK diff model
                     if (diff_model_state_before == "FINETUNING") and \

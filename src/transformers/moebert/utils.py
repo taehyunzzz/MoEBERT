@@ -57,6 +57,7 @@ class ImportanceProcessor:
         top_importance = arr[:self.share_importance]
         remain = arr[self.share_importance:]
         all_experts_remain = []
+        # reorder the remaining rows in the order of assigning to each expert
         for i in range(self.num_experts):
             all_experts_remain.append(remain[i::self.num_experts])
         all_experts_remain = np.array(all_experts_remain)

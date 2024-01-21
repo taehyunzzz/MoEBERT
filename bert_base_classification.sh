@@ -30,6 +30,8 @@ export max_seq_length=256
 
 export logging_steps=0
 export eval_steps=100
+export save_strategy=no
+#export save_strategy=steps
 export save_steps=100
 export save_total_limit=1
 
@@ -228,7 +230,7 @@ CMD="
     --evaluation_strategy steps \
     --eval_steps ${eval_steps} \
 
-    --save_strategy steps \
+    --save_strategy ${save_strategy} \
     --save_steps ${save_steps} \
     --save_total_limit ${save_total_limit} \
 

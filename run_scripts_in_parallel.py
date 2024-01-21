@@ -11,13 +11,13 @@ def main():
     list_mode = [
         # "dense",
         # "importance",
-        "moe",
+        # "moe",
         "diffmoe"
     ]
     list_task_name = [
         "rte",
-        "cola",
-        "mrpc",
+        #"cola",
+        #"mrpc",
         # "sst2",
         # "qnli",
         # "mnli",
@@ -33,6 +33,7 @@ def main():
         3072
     ]
     list_moebert_share_importance=[
+        #0,
         1024,
         2048,
         3072
@@ -66,7 +67,7 @@ def main():
 
                             # print("Running in CUDA{}".format(cuda_device))
 
-                            port_num = 8000 + run_id
+                            port_num = 9000 + run_id
                             run_id += 1
 
                             cmd = cmd_format.format(
