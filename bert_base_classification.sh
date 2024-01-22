@@ -44,7 +44,7 @@ export WANDB_PROJECT="diffmoebert-ablation"
 if [[ 1 ]]; then
     if [[ ${task_name} == "rte" ]]; then
         export learning_rate="1e-5"
-        export batch_size=16
+        export batch_size=8
         export num_train_epochs=10
         export weight_decay=0.01
         export moebert_distill=1.0
@@ -52,16 +52,16 @@ if [[ 1 ]]; then
 
     elif [[ ${task_name} == "cola" ]]; then
         export learning_rate="2e-5"
-        export batch_size=16
-        export num_train_epochs=20
+        export batch_size=8
+        export num_train_epochs=10
         export weight_decay=0.0
         export moebert_distill=3.0
         export ckpt_name="checkpoint-10700"
 
     elif [[ ${task_name} == "mrpc" ]]; then
         export learning_rate="3e-5"
-        export batch_size=16
-        export num_train_epochs=10
+        export batch_size=8
+        export num_train_epochs=5
         export weight_decay=0.0
         export moebert_distill=2.0
         export ckpt_name="checkpoint-2300"
