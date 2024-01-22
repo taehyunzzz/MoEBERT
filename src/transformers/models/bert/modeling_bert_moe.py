@@ -410,8 +410,8 @@ class MoEBertForSequenceClassification(BertPreTrainedModel):
         else :
             self.diff_model_state = "FINETUNING"
 
-        assert (self.moebert_target_sparsity <= 1.0) and (self.moebert_target_sparsity > 0.0), \
-            "self.moebert_target_sparsity should be in range (0.0,1.0]"
+        assert (self.moebert_target_sparsity <= 1.0) and (self.moebert_target_sparsity >= 0.0), \
+            "self.moebert_target_sparsity should be in range [0.0,1.0]"
         ######################################################
 
         self.bert = MoEBertModel(config)

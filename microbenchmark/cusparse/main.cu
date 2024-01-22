@@ -1,141 +1,240 @@
-// https://github.com/NVIDIA/CUDALibrarySamples/blob/master/cuSPARSE/dense2sparse_csr/dense2sparse_csr_example.c
-#include <cuda_runtime_api.h> // cudaMalloc, cudaMemcpy, etc.
-#include <cusparse.h>         // cusparseSparseToDense
-#include <stdio.h>            // printf
-#include <stdlib.h>           // EXIT_FAILURE
+#include <stdio.h>
+#include <stdlib.h>
+#include <cusparse_v2.h>
+#include <cuda.h>
+#include <sys/time.h>
 
-#define CHECK_CUDA(func)                                                       \
+#ifndef _COMMON_H
+#define _COMMON_H
+
+#define CHECK(call)                                                            \
 {                                                                              \
-    cudaError_t status = (func);                                               \
-    if (status != cudaSuccess) {                                               \
-        printf("CUDA API failed at line %d with error: %s (%d)\n",             \
-               __LINE__, cudaGetErrorString(status), status);                  \
-        return EXIT_FAILURE;                                                   \
+    const cudaError_t error = call;                                            \
+    if (error != cudaSuccess)                                                  \
+    {                                                                          \
+        fprintf(stderr, "Error: %s:%d, ", __FILE__, __LINE__);                 \
+        fprintf(stderr, "code: %d, reason: %s\n", error,                       \
+                cudaGetErrorString(error));                                    \
     }                                                                          \
 }
 
-#define CHECK_CUSPARSE(func)                                                   \
+#define CHECK_CUBLAS(call)                                                     \
 {                                                                              \
-    cusparseStatus_t status = (func);                                          \
-    if (status != CUSPARSE_STATUS_SUCCESS) {                                   \
-        printf("CUSPARSE API failed at line %d with error: %s (%d)\n",         \
-               __LINE__, cusparseGetErrorString(status), status);              \
-        return EXIT_FAILURE;                                                   \
+    cublasStatus_t err;                                                        \
+    if ((err = (call)) != CUBLAS_STATUS_SUCCESS)                               \
+    {                                                                          \
+        fprintf(stderr, "Got CUBLAS error %d at %s:%d\n", err, __FILE__,       \
+                __LINE__);                                                     \
+        exit(1);                                                               \
     }                                                                          \
 }
 
-int main(void) {
-    // Host problem definition
-    int   num_rows   = 5;
-    int   num_cols   = 4;
-    int   ld         = num_cols;
-    int   dense_size = ld * num_rows;
-    float h_dense[]  = { 1.0f,  0.0f,  2.0f,  3.0f,
-                         0.0f,  4.0f,  0.0f,  0.0f,
-                         5.0f,  0.0f,  6.0f,  7.0f,
-                         0.0f,  8.0f,  0.0f,  9.0f,
-                         0.0f, 10.0f, 11.0f,  0.0f };
-    int   h_csr_offsets[]         = { 0, 0, 0, 0, 0, 0  };
-    int   h_csr_columns[]         = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-    float h_csr_values[]          = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-    int   h_csr_offsets_result[]  = { 0, 3, 4, 7, 9, 11 };
-    int   h_csr_columns_result[]  = { 0, 2, 3, 1, 0, 2, 3, 1, 3, 1, 2 };
-    float h_csr_values_result[]   = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f,
-                                      7.0f, 8.0f, 9.0f, 10.0f, 11.0f };
-    //--------------------------------------------------------------------------
-    // Device memory management
-    int   *d_csr_offsets, *d_csr_columns;
-    float *d_csr_values,  *d_dense;
-    CHECK_CUDA( cudaMalloc((void**) &d_dense, dense_size * sizeof(float)))
-    CHECK_CUDA( cudaMalloc((void**) &d_csr_offsets,
-                           (num_rows + 1) * sizeof(int)) )
-    CHECK_CUDA( cudaMemcpy(d_dense, h_dense, dense_size * sizeof(float),
-                           cudaMemcpyHostToDevice) )
-    //--------------------------------------------------------------------------
-    // CUSPARSE APIs
-    cusparseHandle_t     handle = NULL;
-    cusparseSpMatDescr_t matB;
-    cusparseDnMatDescr_t matA;
-    void*                dBuffer    = NULL;
-    size_t               bufferSize = 0;
-    CHECK_CUSPARSE( cusparseCreate(&handle) )
-    // Create dense matrix A
-    CHECK_CUSPARSE( cusparseCreateDnMat(&matA, num_rows, num_cols, ld, d_dense,
-                                        CUDA_R_32F, CUSPARSE_ORDER_ROW) )
-    // Create sparse matrix B in CSR format
-    CHECK_CUSPARSE( cusparseCreateCsr(&matB, num_rows, num_cols, 0,
-                                      d_csr_offsets, NULL, NULL,
-                                      CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
-                                      CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F) )
+#define CHECK_CURAND(call)                                                     \
+{                                                                              \
+    curandStatus_t err;                                                        \
+    if ((err = (call)) != CURAND_STATUS_SUCCESS)                               \
+    {                                                                          \
+        fprintf(stderr, "Got CURAND error %d at %s:%d\n", err, __FILE__,       \
+                __LINE__);                                                     \
+        exit(1);                                                               \
+    }                                                                          \
+}
 
-    // allocate an external buffer if needed
-    CHECK_CUSPARSE( cusparseDenseToSparse_bufferSize(
-                                        handle, matA, matB,
-                                        CUSPARSE_DENSETOSPARSE_ALG_DEFAULT,
-                                        &bufferSize) )
-    CHECK_CUDA( cudaMalloc(&dBuffer, bufferSize) )
+#define CHECK_CUFFT(call)                                                      \
+{                                                                              \
+    cufftResult err;                                                           \
+    if ( (err = (call)) != CUFFT_SUCCESS)                                      \
+    {                                                                          \
+        fprintf(stderr, "Got CUFFT error %d at %s:%d\n", err, __FILE__,        \
+                __LINE__);                                                     \
+        exit(1);                                                               \
+    }                                                                          \
+}
 
-    // execute Sparse to Dense conversion
-    CHECK_CUSPARSE( cusparseDenseToSparse_analysis(handle, matA, matB,
-                                        CUSPARSE_DENSETOSPARSE_ALG_DEFAULT,
-                                        dBuffer) )
-    // get number of non-zero elements
-    int64_t num_rows_tmp, num_cols_tmp, nnz;
-    CHECK_CUSPARSE( cusparseSpMatGetSize(matB, &num_rows_tmp, &num_cols_tmp,
-                                         &nnz) )
+#define CHECK_CUSPARSE(call)                                                   \
+{                                                                              \
+    cusparseStatus_t err;                                                      \
+    if ((err = (call)) != CUSPARSE_STATUS_SUCCESS)                             \
+    {                                                                          \
+        fprintf(stderr, "Got error %d at %s:%d\n", err, __FILE__, __LINE__);   \
+        cudaError_t cuda_err = cudaGetLastError();                             \
+        if (cuda_err != cudaSuccess)                                           \
+        {                                                                      \
+            fprintf(stderr, "  CUDA error \"%s\" also detected\n",             \
+                    cudaGetErrorString(cuda_err));                             \
+        }                                                                      \
+        exit(1);                                                               \
+    }                                                                          \
+}
 
-    // allocate CSR column indices and values
-    CHECK_CUDA( cudaMalloc((void**) &d_csr_columns, nnz * sizeof(int))   )
-    CHECK_CUDA( cudaMalloc((void**) &d_csr_values,  nnz * sizeof(float)) )
-    // reset offsets, column indices, and values pointers
-    CHECK_CUSPARSE( cusparseCsrSetPointers(matB, d_csr_offsets, d_csr_columns,
-                                           d_csr_values) )
-    // execute Sparse to Dense conversion
-    CHECK_CUSPARSE( cusparseDenseToSparse_convert(handle, matA, matB,
-                                        CUSPARSE_DENSETOSPARSE_ALG_DEFAULT,
-                                        dBuffer) )
-    // destroy matrix/vector descriptors
-    CHECK_CUSPARSE( cusparseDestroyDnMat(matA) )
-    CHECK_CUSPARSE( cusparseDestroySpMat(matB) )
-    CHECK_CUSPARSE( cusparseDestroy(handle) )
-    //--------------------------------------------------------------------------
-    // device result check
-    CHECK_CUDA( cudaMemcpy(h_csr_offsets, d_csr_offsets,
-                           (num_rows + 1) * sizeof(int),
-                           cudaMemcpyDeviceToHost) )
-    CHECK_CUDA( cudaMemcpy(h_csr_columns, d_csr_columns, nnz * sizeof(int),
-                           cudaMemcpyDeviceToHost) )
-    CHECK_CUDA( cudaMemcpy(h_csr_values, d_csr_values, nnz * sizeof(float),
-                           cudaMemcpyDeviceToHost) )
-    int correct = 1;
-    for (int i = 0; i < num_rows + 1; i++) {
-        if (h_csr_offsets[i] != h_csr_offsets_result[i]) {
-            correct = 0;
-            break;
+inline double seconds()
+{
+    struct timeval tp;
+    struct timezone tzp;
+    int i = gettimeofday(&tp, &tzp);
+    return ((double)tp.tv_sec + (double)tp.tv_usec * 1.e-6);
+}
+
+#endif // _COMMON_H
+
+/*
+ * This is an example demonstrating usage of the cuSPARSE library to perform a
+ * sparse matrix-vector multiplication on randomly generated data.
+ */
+
+/*
+ * M = # of rows
+ * N = # of columns
+ */
+int M = 1024;
+int N = 1024;
+
+/*
+ * Generate random dense matrix A in column-major order, while rounding some
+ * elements down to zero to ensure it is sparse.
+ */
+int generate_random_dense_matrix(int M, int N, float **outA)
+{
+    int i, j;
+    double rMax = (double)RAND_MAX;
+    float *A = (float *)malloc(sizeof(float) * M * N);
+    int totalNnz = 0;
+
+    for (j = 0; j < N; j++)
+    {
+        for (i = 0; i < M; i++)
+        {
+            int r = rand();
+            float *curr = A + (j * M + i);
+
+            if (r % 3 > 0)
+            {
+                *curr = 0.0f;
+            }
+            else
+            {
+                double dr = (double)r;
+                *curr = (dr / rMax) * 100.0;
+            }
+
+            if (*curr != 0.0f)
+            {
+                totalNnz++;
+            }
         }
     }
-    for (int i = 0; i < nnz; i++) {
-        if (h_csr_columns[i] != h_csr_columns_result[i]) {
-            correct = 0;
-            break;
+
+    *outA = A;
+    return totalNnz;
+}
+
+void print_partial_matrix(float *M, int nrows, int ncols, int max_row,
+        int max_col)
+{
+    int row, col;
+
+    for (row = 0; row < max_row; row++)
+    {
+        for (col = 0; col < max_col; col++)
+        {
+            printf("%2.2f ", M[row * ncols + col]);
         }
+        printf("...\n");
     }
-    for (int i = 0; i < nnz; i++) {
-        if (h_csr_values[i] != h_csr_values_result[i]) {
-            correct = 0;
-            break;
-        }
+    printf("...\n");
+}
+
+int main(int argc, char **argv)
+{
+    float *A, *dA;
+    float *B, *dB;
+    float *C, *dC;
+    int *dANnzPerRow;
+    float *dCsrValA;
+    int *dCsrRowPtrA;
+    int *dCsrColIndA;
+    int totalANnz;
+    float alpha = 3.0f;
+    float beta = 4.0f;
+    cusparseHandle_t handle = 0;
+    cusparseMatDescr_t Adescr = 0;
+
+    // Generate input
+    srand(9384);
+    int trueANnz = generate_random_dense_matrix(M, N, &A);
+    int trueBNnz = generate_random_dense_matrix(N, M, &B);
+    C = (float *)malloc(sizeof(float) * M * M);
+
+    printf("A:\n");
+    print_partial_matrix(A, M, N, 10, 10);
+    printf("B:\n");
+    print_partial_matrix(B, N, M, 10, 10);
+
+    // Create the cuSPARSE handle
+    CHECK_CUSPARSE(cusparseCreate(&handle));
+
+    // Allocate device memory for vectors and the dense form of the matrix A
+    CHECK(cudaMalloc((void **)&dA, sizeof(float) * M * N));
+    CHECK(cudaMalloc((void **)&dB, sizeof(float) * N * M));
+    CHECK(cudaMalloc((void **)&dC, sizeof(float) * M * M));
+    CHECK(cudaMalloc((void **)&dANnzPerRow, sizeof(int) * M));
+
+    // Construct a descriptor of the matrix A
+    CHECK_CUSPARSE(cusparseCreateMatDescr(&Adescr));
+    CHECK_CUSPARSE(cusparseSetMatType(Adescr, CUSPARSE_MATRIX_TYPE_GENERAL));
+    CHECK_CUSPARSE(cusparseSetMatIndexBase(Adescr, CUSPARSE_INDEX_BASE_ZERO));
+
+    // Transfer the input vectors and dense matrix A to the device
+    CHECK(cudaMemcpy(dA, A, sizeof(float) * M * N, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(dB, B, sizeof(float) * N * M, cudaMemcpyHostToDevice));
+    CHECK(cudaMemset(dC, 0x00, sizeof(float) * M * M));
+
+    // Compute the number of non-zero elements in A
+    CHECK_CUSPARSE(cusparseSnnz(handle, CUSPARSE_DIRECTION_ROW, M, N, Adescr,
+                                dA, M, dANnzPerRow, &totalANnz));
+
+    if (totalANnz != trueANnz)
+    {
+        fprintf(stderr, "Difference detected between cuSPARSE NNZ and true "
+                "value: expected %d but got %d\n", trueANnz, totalANnz);
+        return 1;
     }
-    if (correct)
-        printf("dense2sparse_csr_example test PASSED\n");
-    else
-        printf("dense2sparse_csr_example test FAILED: wrong result\n");
-    //--------------------------------------------------------------------------
-    // device memory deallocation
-    CHECK_CUDA( cudaFree(dBuffer) )
-    CHECK_CUDA( cudaFree(d_csr_offsets) )
-    CHECK_CUDA( cudaFree(d_csr_columns) )
-    CHECK_CUDA( cudaFree(d_csr_values) )
-    CHECK_CUDA( cudaFree(d_dense) )
-    return EXIT_SUCCESS;
+
+    // Allocate device memory to store the sparse CSR representation of A
+    CHECK(cudaMalloc((void **)&dCsrValA, sizeof(float) * totalANnz));
+    CHECK(cudaMalloc((void **)&dCsrRowPtrA, sizeof(int) * (M + 1)));
+    CHECK(cudaMalloc((void **)&dCsrColIndA, sizeof(int) * totalANnz));
+
+    // Convert A from a dense formatting to a CSR formatting, using the GPU
+    CHECK_CUSPARSE(cusparseSdense2csr(handle, M, N, Adescr, dA, M, dANnzPerRow,
+                                      dCsrValA, dCsrRowPtrA, dCsrColIndA));
+
+    // Perform matrix-matrix multiplication with the CSR-formatted matrix A
+    CHECK_CUSPARSE(cusparseScsrmm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, M,
+                                  M, N, totalANnz, &alpha, Adescr, dCsrValA,
+                                  dCsrRowPtrA, dCsrColIndA, dB, N, &beta, dC,
+                                  M));
+
+    // Copy the result vector back to the host
+    CHECK(cudaMemcpy(C, dC, sizeof(float) * M * M, cudaMemcpyDeviceToHost));
+
+    printf("C:\n");
+    print_partial_matrix(C, M, M, 10, 10);
+
+    free(A);
+    free(B);
+    free(C);
+
+    CHECK(cudaFree(dA));
+    CHECK(cudaFree(dB));
+    CHECK(cudaFree(dC));
+    CHECK(cudaFree(dANnzPerRow));
+    CHECK(cudaFree(dCsrValA));
+    CHECK(cudaFree(dCsrRowPtrA));
+    CHECK(cudaFree(dCsrColIndA));
+
+    CHECK_CUSPARSE(cusparseDestroyMatDescr(Adescr));
+    CHECK_CUSPARSE(cusparseDestroy(handle));
+
+    return 0;
 }

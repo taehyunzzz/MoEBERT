@@ -67,6 +67,7 @@ class ImportanceProcessor:
             temp = np.concatenate((top_importance, temp))
             temp = temp[:self.intermediate_size]
             result.append(temp.copy())
+        # Array of indices for each expert
         result = np.array(result)
         return result
 
@@ -80,12 +81,17 @@ class ImportanceProcessor:
         layernorm_bias_data = model_layer.output.LayerNorm.bias.data
         for i in range(self.num_local_experts):
             idx = self.importance[i]
-            expert_list[i].fc1.weight.data = fc1_weight_data[idx, :].clone()
-            expert_list[i].fc1.bias.data = fc1_bias_data[idx].clone()
-            expert_list[i].fc2.weight.data = fc2_weight_data[:, idx].clone()
-            expert_list[i].fc2.bias.data = fc2_bias_data.clone()
-            expert_list[i].LayerNorm.weight.data = layernorm_weight_data.clone()
-            expert_list[i].LayerNorm.bias.data = layernorm_bias_data.clone()
+
+            # Modified
+            # Maintain weight data shape. Overwrite data in specific indices.
+            # Keep rest in initialized state.
+            expert_list[i].fc1.weight.data[:idx.shape[0],:] = fc1_weight_data[idx, :].clone()
+            expert_list[i].fc1.bias.data[:idx.shape[0]]     = fc1_bias_data[idx].clone()
+            expert_list[i].fc2.weight.data[:,:idx.shape[0]] = fc2_weight_data[:, idx].clone()
+            expert_list[i].fc2.bias.data                    = fc2_bias_data.clone()
+            expert_list[i].LayerNorm.weight.data            = layernorm_weight_data.clone()
+            expert_list[i].LayerNorm.bias.data              = layernorm_bias_data.clone()
+
         del model_layer.intermediate
         del model_layer.output
         self.is_moe = True
@@ -112,10 +118,14 @@ class ImportanceProcessor:
             expert_list[i].fc2_shared.bias.data     = fc2_bias_data.clone()
 
             # unique weights
-            expert_list[i].fc1_unique.weight.data   = fc1_weight_data[unique_idx, :].clone()
-            expert_list[i].fc1_unique.bias.data     = fc1_bias_data[unique_idx].clone()
-            expert_list[i].fc2_unique.weight.data   = fc2_weight_data[:, unique_idx].clone()
-            expert_list[i].fc2_unique.bias.data     = fc2_bias_data.clone()
+
+            # Modified
+            # Maintain weight data shape. Overwrite data in specific indices.
+            # Keep rest in initialized state.
+            expert_list[i].fc1_unique.weight.data[:unique_idx.shape[0],:]  = fc1_weight_data[unique_idx,:].clone()
+            expert_list[i].fc1_unique.bias.data[:unique_idx.shape[0]]       = fc1_bias_data[unique_idx].clone()
+            expert_list[i].fc2_unique.weight.data[:,:unique_idx.shape[0]]    = fc2_weight_data[:,unique_idx].clone()
+            expert_list[i].fc2_unique.bias.data                             = fc2_bias_data.clone()
 
             expert_list[i].LayerNorm.weight.data = layernorm_weight_data.clone()
             expert_list[i].LayerNorm.bias.data = layernorm_bias_data.clone()

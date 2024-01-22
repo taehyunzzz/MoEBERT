@@ -4,7 +4,7 @@ import multiprocessing
 cwd = "/home/kimth/workspace/MoEBERT"
 
 def run_bash_script(cmd):
-    print("Run {}".format(cmd))
+    # print("Run {}".format(" ".join(cmd)))
     subprocess.run(args=cmd, cwd=cwd)
 
 def main():
@@ -16,8 +16,8 @@ def main():
     ]
     list_task_name = [
         "rte",
-        #"cola",
-        #"mrpc",
+        # "cola",
+        # "mrpc",
         # "sst2",
         # "qnli",
         # "mnli",
@@ -25,23 +25,24 @@ def main():
         ]
 
     list_moebert_expert_num=[
-        4,
+        # 4,
         8,
-        16
+        # 16
     ]
     list_moebert_expert_dim=[
         3072
     ]
     list_moebert_share_importance=[
-        #0,
+        # 0,
         1024,
         2048,
-        3072
+        # 3072
     ]
     list_moebert_target_sparsity=[
-        0.1,
-        0.05,
-        0.01,
+        # 0.1,
+        # 0.05,
+        # 0.01,
+        0
     ]
 
     cmd_format = "bash bert_base_classification.sh {} {} {} {} {} {} {} {}"
@@ -67,7 +68,7 @@ def main():
 
                             # print("Running in CUDA{}".format(cuda_device))
 
-                            port_num = 9000 + run_id
+                            port_num = 7000 + run_id
                             run_id += 1
 
                             cmd = cmd_format.format(
