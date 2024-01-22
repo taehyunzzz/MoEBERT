@@ -29,10 +29,10 @@ export warmup_steps=100
 export max_seq_length=256
 
 export logging_steps=0
-export eval_steps=200
-export save_strategy=no
-#export save_strategy=steps
-export save_steps=200
+export eval_steps=100
+# export save_strategy=no
+export save_strategy=steps
+export save_steps=100
 export save_total_limit=1
 
 export WANDB_ENTITY="taehyunzzz"
@@ -48,7 +48,7 @@ if [[ 1 ]]; then
         export num_train_epochs=10
         export weight_decay=0.01
         export moebert_distill=1.0
-        export ckpt_name="checkpoint-1550"
+        export ckpt_name="checkpoint-3100"
 
     elif [[ ${task_name} == "cola" ]]; then
         export learning_rate="2e-5"
@@ -61,10 +61,10 @@ if [[ 1 ]]; then
     elif [[ ${task_name} == "mrpc" ]]; then
         export learning_rate="3e-5"
         export batch_size=8
-        export num_train_epochs=5
+        export num_train_epochs=10 # modified 5->10 to make loss smaller
         export weight_decay=0.0
         export moebert_distill=2.0
-        export ckpt_name="checkpoint-2300"
+        export ckpt_name="checkpoint-4500"
 
     elif [[ ${task_name} == "sst2" ]]; then
         export learning_rate="2e-5"
@@ -123,7 +123,7 @@ export MODE=${mode}
 fi
 
 if [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
-export num_train_epochs=$(( ${num_train_epochs} * 8 ))
+export num_train_epochs=$(( ${num_train_epochs} * 5 ))
 echo "Increasing training epochs to ${num_train_epochs}"
 fi
 
@@ -184,7 +184,7 @@ else
 
 fi
 
-export output_dir="ckpt/${MODE}/${run_name}"
+export output_dir="ckpt/${MODE}/${task_name}"
 mkdir -p ${output_dir}
 mkdir -p ${output_dir}/model
 mkdir -p ${output_dir}/log
@@ -225,11 +225,11 @@ CMD="
     --warmup_ratio 0.0 \
     --seed ${random_seed} \
     --weight_decay ${weight_decay} \
-    --fp16 \
 
     --local_rank ${cuda_device} \
     --moebert_device ${cuda_device} \
 "
+    # --fp16 \
 
 if [[ ${MODE} == "dense" ]]; then
     echo "Train dense model"

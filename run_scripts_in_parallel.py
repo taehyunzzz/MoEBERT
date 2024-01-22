@@ -55,6 +55,44 @@ def sweep_dense():
         "list_moebert_target_sparsity"  :list_moebert_target_sparsity,
     }
 
+# importance
+def sweep_importance():
+    list_mode = [
+        # "dense",
+        "importance",
+        # "moe",
+        # "diffmoe"
+    ]
+
+    list_moebert_expert_num=[
+        # 4,
+        8,
+        # 16
+    ]
+    list_moebert_expert_dim=[
+        3072
+    ]
+    list_moebert_share_importance=[
+        # 0,
+        # 1024,
+        2048,
+        # 3072
+    ]
+    list_moebert_target_sparsity=[
+        # 0.05,
+        0.01,
+        # 0.005,
+        # 0
+    ]
+
+    return {
+        "list_mode"                     :list_mode,
+        "list_moebert_expert_num"       :list_moebert_expert_num,
+        "list_moebert_expert_dim"       :list_moebert_expert_dim,
+        "list_moebert_share_importance" :list_moebert_share_importance,
+        "list_moebert_target_sparsity"  :list_moebert_target_sparsity,
+    }
+
 # base + sweep
 def sweep_expert():
     list_mode = [
@@ -218,11 +256,21 @@ def run_cmds(commands, num_workers=4):
         pool.map(run_bash_script, commands, chunksize=1)
 
 def main():
-    cmd_list = create_sweep_cmd(**sweep_dense()          , base_port_num=9000)
-    # cmd_list = create_sweep_cmd(**sweep_expert()         , base_port_num=6000)
-    # cmd_list = create_sweep_cmd(**sweep_shared_dim()     , base_port_num=7000)
-    # cmd_list = create_sweep_cmd(**sweep_target_sparsity(), base_port_num=8000)
-    run_cmds(cmd_list, num_workers=4)
+    # dense 
+    if 1:
+        cmd_list = create_sweep_cmd(**sweep_dense()          , base_port_num=9000)
+        run_cmds(cmd_list, num_workers=4)
+
+    # importance
+    if 0:
+        cmd_list = create_sweep_cmd(**sweep_importance()   , base_port_num=8000)
+        run_cmds(cmd_list, num_workers=1)
+
+    if 0:
+        # cmd_list = create_sweep_cmd(**sweep_expert()         , base_port_num=6000)
+        # cmd_list = create_sweep_cmd(**sweep_shared_dim()     , base_port_num=7000)
+        # cmd_list = create_sweep_cmd(**sweep_target_sparsity(), base_port_num=8000)
+        run_cmds(cmd_list, num_workers=4)
     
 if __name__ == "__main__":
     main()
