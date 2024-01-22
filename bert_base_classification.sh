@@ -128,7 +128,7 @@ export MODE=${mode}
 fi
 
 if [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
-export num_train_epochs=$(( ${num_train_epochs} * 5 ))
+export num_train_epochs=$(( ${num_train_epochs} * 8 ))
 echo "Increasing training epochs to ${num_train_epochs}"
 fi
 

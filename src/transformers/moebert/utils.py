@@ -112,20 +112,18 @@ class ImportanceProcessor:
             unique_idx = idx[shared_size:]
             
             # shared important weights
-            expert_list[i].fc1_shared.weight.data   = fc1_weight_data[shared_idx, :].clone()
-            expert_list[i].fc1_shared.bias.data     = fc1_bias_data[shared_idx].clone()
-            expert_list[i].fc2_shared.weight.data   = fc2_weight_data[:, shared_idx].clone()
-            expert_list[i].fc2_shared.bias.data     = fc2_bias_data.clone()
+            if shared_size > 0:
+                expert_list[i].fc1_shared.weight.data   = fc1_weight_data[shared_idx, :].clone()
+                expert_list[i].fc1_shared.bias.data     = fc1_bias_data[shared_idx].clone()
+                expert_list[i].fc2_shared.weight.data   = fc2_weight_data[:, shared_idx].clone()
+                expert_list[i].fc2_shared.bias.data     = fc2_bias_data.clone()
 
             # unique weights
-
-            # Modified
-            # Maintain weight data shape. Overwrite data in specific indices.
-            # Keep rest in initialized state.
-            expert_list[i].fc1_unique.weight.data[:unique_idx.shape[0],:]  = fc1_weight_data[unique_idx,:].clone()
-            expert_list[i].fc1_unique.bias.data[:unique_idx.shape[0]]       = fc1_bias_data[unique_idx].clone()
-            expert_list[i].fc2_unique.weight.data[:,:unique_idx.shape[0]]    = fc2_weight_data[:,unique_idx].clone()
-            expert_list[i].fc2_unique.bias.data                             = fc2_bias_data.clone()
+            if len(unique_idx) > 0:
+                expert_list[i].fc1_unique.weight.data[:unique_idx.shape[0],:]  = fc1_weight_data[unique_idx,:].clone()
+                expert_list[i].fc1_unique.bias.data[:unique_idx.shape[0]]      = fc1_bias_data[unique_idx].clone()
+                expert_list[i].fc2_unique.weight.data[:,:unique_idx.shape[0]]  = fc2_weight_data[:,unique_idx].clone()
+                expert_list[i].fc2_unique.bias.data                            = fc2_bias_data.clone()
 
             expert_list[i].LayerNorm.weight.data = layernorm_weight_data.clone()
             expert_list[i].LayerNorm.bias.data = layernorm_bias_data.clone()
@@ -320,12 +318,20 @@ class DiffFeedForward(nn.Module):
                                                                     )
 
         # shared important layers
-        self.fc1_shared = nn.Linear(config.hidden_size, self.shared_size)
-        self.fc2_shared = nn.Linear(self.shared_size, config.hidden_size)
+        if self.shared_size != 0:
+            self.fc1_shared = nn.Linear(config.hidden_size, self.shared_size)
+            self.fc2_shared = nn.Linear(self.shared_size, config.hidden_size)
+        else :
+            self.fc1_shared = nn.Identity()
+            self.fc2_shared = nn.Identity()
 
         # expert-unique layers
-        self.fc1_unique = nn.Linear(config.hidden_size, self.unique_size)
-        self.fc2_unique = nn.Linear(self.unique_size, config.hidden_size)
+        if self.unique_size != 0:
+            self.fc1_unique = nn.Linear(config.hidden_size, self.unique_size)
+            self.fc2_unique = nn.Linear(self.unique_size, config.hidden_size)
+        else :
+            self.fc1_unique = nn.Identity()
+            self.fc2_unique = nn.Identity()
 
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
@@ -334,7 +340,11 @@ class DiffFeedForward(nn.Module):
 
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(dropout)
-        self.model_state = "FINETUNING" # (FINETUNING, FIXMASK, TASK)
+
+        if self.shared_size > 0:
+            self.model_state = "FINETUNING" # (FINETUNING, FIXMASK, TASK)
+        else :
+            self.model_state = "TASK" # (FINETUNING, FIXMASK, TASK)
 
     def _add_diff_parametrizations(self):
         # Apply diff parametrization to shared submatrices
@@ -380,7 +390,10 @@ class DiffFeedForward(nn.Module):
 
     @property
     def n_parametrizations(self) -> int:
-        return len(list(self.get_base_modules()[0].parametrizations.values())[0])
+        if (self.model_state == "FINETUNING" or self.model_state == "FIXMASK"):
+            return len(list(self.get_base_modules()[0].parametrizations.values())[0])
+        else :
+            return 0
 
     def get_log_ratio(self) -> int:
         import math
@@ -460,55 +473,58 @@ class DiffFeedForward(nn.Module):
             if abs: values = torch.abs(values)
             return torch.topk(values, k+1, largest=True, sorted=True)[0][-1]
 
-        assert self.model_state == "FINETUNING", "model needs to be in finetuning state, currently {}".format(self.model_state)
+        # assert self.model_state == "FINETUNING", "model needs to be in finetuning state, currently {}".format(self.model_state)
 
-        with self.deterministic():
+        # Change to FIXMASK only if in FINETUNING state.
+        # Keep in TASK state if already in TASK state
+        if self.model_state == "FINETUNING":
+            with self.deterministic():
+                if pct is not None:
+                    # Find absolute value of all weight diff vectors
+                    diff_weights_abs = [torch.tensor([])] * self.n_parametrizations
+                    for base_module in list(self.get_base_modules()):
+                        for n, par_list in list(base_module.parametrizations.items()):
+                            w = par_list.original.detach()
+                            for idx, seq in enumerate(sequential):
+                                diff_weight = par_list[idx].diff_weight(w)
+                                diff_weights_abs[idx] = torch.cat([diff_weights_abs[idx], torch.abs(diff_weight.flatten().cpu())])
+                                if seq: w = diff_weight + w
 
-            if pct is not None:
+                    # find cutoff value for each weight
+                    if merged_cutoff and (self.n_parametrizations > 1):
+                        min_cutoffs = [_get_cutoff(x, merged_min_pct, abs=False) for x in diff_weights_abs]
+                        if merged_min_pct >= pct:
+                            print(f"merged_min_pct >= pct, using target sparsity merged_min_pct={merged_min_pct}")
+                            cutoffs = min_cutoffs
+                        else:
+                            remaining = torch.cat([x[x<c] for x,c in zip(diff_weights_abs, min_cutoffs)])
+                            remaining_cutoff = _get_cutoff(remaining, pct - merged_min_pct)
+                            cutoffs = [min(remaining_cutoff, c) for c in min_cutoffs]
+                    else:
+                        cutoffs = [_get_cutoff(x, pct, abs=False) for x in diff_weights_abs]
 
-                # Find absolute value of all weight diff vectors
-                diff_weights_abs = [torch.tensor([])] * self.n_parametrizations
-                for base_module in list(self.get_base_modules()):
+                for base_module in self.get_base_modules():
                     for n, par_list in list(base_module.parametrizations.items()):
-                        w = par_list.original.detach()
+                        diff_weights = []
+                        w = par_list.original
                         for idx, seq in enumerate(sequential):
                             diff_weight = par_list[idx].diff_weight(w)
-                            diff_weights_abs[idx] = torch.cat([diff_weights_abs[idx], torch.abs(diff_weight.flatten().cpu())])
+                            if pct is not None:
+                                i = 0 if merged_cutoff else idx
+                                diff_mask = (torch.abs(diff_weight) > cutoffs[i])
+                            else:
+                                diff_mask = ~torch.isclose(diff_weight, torch.tensor(0.), rtol=1e-8)
+                            diff_weights.append((diff_weight, diff_mask))
                             if seq: w = diff_weight + w
 
-                # find cutoff value for each weight
-                if merged_cutoff and (self.n_parametrizations > 1):
-                    min_cutoffs = [_get_cutoff(x, merged_min_pct, abs=False) for x in diff_weights_abs]
-                    if merged_min_pct >= pct:
-                        print(f"merged_min_pct >= pct, using target sparsity merged_min_pct={merged_min_pct}")
-                        cutoffs = min_cutoffs
-                    else:
-                        remaining = torch.cat([x[x<c] for x,c in zip(diff_weights_abs, min_cutoffs)])
-                        remaining_cutoff = _get_cutoff(remaining, pct - merged_min_pct)
-                        cutoffs = [min(remaining_cutoff, c) for c in min_cutoffs]
-                else:
-                    cutoffs = [_get_cutoff(x, pct, abs=False) for x in diff_weights_abs]
+                        parametrize.remove_parametrizations(base_module, n, leave_parametrized=False)
+                        for (diff_weight, diff_mask) in diff_weights:
+                            parametrize.register_parametrization(base_module, n, DiffWeightFixmask(diff_weight, diff_mask))
+                            
+                            # if parametrization occurs at least once, change model_state
+                            self.model_state = "FIXMASK"
+                            self.fixmask_pct = pct
 
-            for base_module in self.get_base_modules():
-                for n, par_list in list(base_module.parametrizations.items()):
-                    diff_weights = []
-                    w = par_list.original
-                    for idx, seq in enumerate(sequential):
-                        diff_weight = par_list[idx].diff_weight(w)
-                        if pct is not None:
-                            i = 0 if merged_cutoff else idx
-                            diff_mask = (torch.abs(diff_weight) > cutoffs[i])
-                        else:
-                            diff_mask = ~torch.isclose(diff_weight, torch.tensor(0.), rtol=1e-8)
-                        diff_weights.append((diff_weight, diff_mask))
-                        if seq: w = diff_weight + w
-
-                    parametrize.remove_parametrizations(base_module, n, leave_parametrized=False)
-                    for (diff_weight, diff_mask) in diff_weights:
-                        parametrize.register_parametrization(base_module, n, DiffWeightFixmask(diff_weight, diff_mask))
-
-        self.model_state = "FIXMASK"
-        self.fixmask_pct = pct
 
     def _get_diff_param_groups(
         self,
@@ -581,7 +597,8 @@ class DiffFeedForward(nn.Module):
 
     @torch.no_grad()
     def _count_non_zero_params(self, *args, **kwargs) -> Tuple[int, int, int]:
-        l = [self._count_non_zero_params_for_module(m, *args, **kwargs) for m in list(self.get_base_modules())]
+        l = [[0,0,0]]
+        l += [self._count_non_zero_params_for_module(m, *args, **kwargs) for m in list(self.get_base_modules())]
         return [sum(x) for x in list(zip(*l))]
 
     @torch.no_grad()
@@ -598,23 +615,28 @@ class DiffFeedForward(nn.Module):
                     n_p_one = (p == 1.).sum()
                 return torch.tensor([n_p, n_p_zero, n_p_one])
 
-            assert hasattr(m, "parametrizations"), "module has no parametrizations"
-            p_counts = torch.zeros((3,), dtype=int)
-            with self.deterministic():
-                for n, par_list in list(m.parametrizations.items()):
-                    if merged:
-                        if isinstance(par_list[0], DiffWeightFixmask):
-                            p = torch.stack([x.mask for x in par_list]).sum(0)
+            # assert hasattr(m, "parametrizations"), "module has no parametrizations"
+            if hasattr(m, "parametrizations"):
+                p_counts = torch.zeros((3,), dtype=int)
+                with self.deterministic():
+                    for n, par_list in list(m.parametrizations.items()):
+                        if merged:
+                            if isinstance(par_list[0], DiffWeightFixmask):
+                                p = torch.stack([x.mask for x in par_list]).sum(0)
+                            else:
+                                p = torch.stack([(x.z != 0.) for x in par_list]).sum(0)
+                            p_counts += count_fn(p, True)
                         else:
-                            p = torch.stack([(x.z != 0.) for x in par_list]).sum(0)
-                        p_counts += count_fn(p, True)
-                    else:
-                        if idx is not None: par_list = [par_list[idx]]
-                        for par in par_list:
-                            p = par.mask if isinstance(par, DiffWeightFixmask) else par.z
-                            p_counts += count_fn(p, p.dtype==torch.bool)
+                            if idx is not None: par_list = [par_list[idx]]
+                            for par in par_list:
+                                p = par.mask if isinstance(par, DiffWeightFixmask) else par.z
+                                p_counts += count_fn(p, p.dtype==torch.bool)
 
-            return p_counts.tolist()
+                p_counts = p_counts.tolist()
+            else: 
+                p_counts = [0,0,0]
+
+            return p_counts
 
     def forward(self, hidden_states: Tensor):
         input_tensor = hidden_states
