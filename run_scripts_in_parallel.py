@@ -9,14 +9,15 @@ def run_bash_script(cmd):
 
 list_task_name = [
     "rte",
-    "cola",
-    "mrpc",
+    # "cola",
+    # "mrpc",
     # "sst2",
     # "qnli",
     # "mnli",
     # "qqp",
     ]
 
+# base + sweep
 def sweep_expert():
     list_mode = [
         # "dense",
@@ -40,7 +41,6 @@ def sweep_expert():
         # 3072
     ]
     list_moebert_target_sparsity=[
-        # 0.1,
         # 0.05,
         0.01,
         # 0.005,
@@ -73,11 +73,10 @@ def sweep_shared_dim():
     list_moebert_share_importance=[
         0,
         1024,
-        2048,
+        # 2048,
         3072
     ]
     list_moebert_target_sparsity=[
-        # 0.1,
         # 0.05,
         0.01,
         # 0.005,
@@ -114,9 +113,8 @@ def sweep_target_sparsity():
         # 3072
     ]
     list_moebert_target_sparsity=[
-        # 0.1,
         0.05,
-        0.01,
+        # 0.01,
         0.005,
         0
     ]
@@ -129,25 +127,22 @@ def sweep_target_sparsity():
         "list_moebert_target_sparsity"  :list_moebert_target_sparsity,
     }
 
-def run_sweep(list_mode,
-              list_moebert_expert_num,
-              list_moebert_expert_dim,
-              list_moebert_share_importance,
-              list_moebert_target_sparsity,
-              num_base_workers=4,
-              base_port_num=6000,
-              ):
+def create_sweep_cmd(
+    list_mode,
+    list_moebert_expert_num,
+    list_moebert_expert_dim,
+    list_moebert_share_importance,
+    list_moebert_target_sparsity,
+    base_port_num=6000,
+):
 
     cmd_format = "bash bert_base_classification.sh {} {} {} {} {} {} {} {}"
 
     run_id = 0
     commands = []
-    for mode in list_mode:
 
-        # set num workers
-        num_workers = 1 if mode == "importance" else num_base_workers
-
-        for task_name in list_task_name:
+    for task_name in list_task_name:
+        for mode in list_mode:
             for moebert_expert_num in list_moebert_expert_num:
                 for moebert_expert_dim in list_moebert_expert_dim:
                     for moebert_share_importance in list_moebert_share_importance:
@@ -168,21 +163,31 @@ def run_sweep(list_mode,
                                 moebert_share_importance,
                                 moebert_target_sparsity,
                             )
-                            cmd_list = cmd.split(" ")
-                            commands.append(cmd_list)
+                            commands.append(cmd)
 
                             # Run this loop only once if not diffmoe
                             if mode != "diffmoe" :
                                 break
+    return commands
+
+def run_cmds(commands, num_workers=4):
+
+    # split commands into list of strings
+    commands = [cmd.split(" ") for cmd in commands]
 
     # Run commands in parallel
     with multiprocessing.Pool(processes=num_workers) as pool:
         pool.map(run_bash_script, commands, chunksize=1)
 
 def main():
-    run_sweep( **sweep_expert()          , num_base_workers=6) 
-    run_sweep( **sweep_shared_dim()      , num_base_workers=6) 
-    run_sweep( **sweep_target_sparsity() , num_base_workers=6) 
+    cmd_list  = create_sweep_cmd(**sweep_expert()        , base_port_num=6000)
+    run_cmds(cmd_list)
+
+    cmd_list = create_sweep_cmd(**sweep_shared_dim()     , base_port_num=7000)
+    run_cmds(cmd_list)
+
+    cmd_list = create_sweep_cmd(**sweep_target_sparsity(), base_port_num=8000)
+    run_cmds(cmd_list)
     
 if __name__ == "__main__":
     main()
