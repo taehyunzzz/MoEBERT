@@ -46,14 +46,30 @@
  * comments to the code, the above Disclaimer and U.S. Government End
  * Users Notice.
  */
+
+#include <cublas_v2.h>
+#include <cuda_runtime.h>
+// #include "cublas_utils.h"
+
 #include <nvtx3/nvToolsExt.h>
 #include <cuda_runtime_api.h> // cudaMalloc, cudaMemcpy, etc.
 #include <cusparse.h>         // cusparseSpMM
+
 #include <stdio.h>            // printf
 #include <stdlib.h>           // EXIT_FAILURE
 #include <iostream>
 #include <getopt.h>
 // #include <cstdlib>
+
+#define CHECK_CUBLAS(func)                                                       \
+{                                                                              \
+    cublasStatus_t status = (func);                                               \
+    if (status != CUBLAS_STATUS_SUCCESS) {                                               \
+        printf("CUBLAS API failed at line %d with error: %d\n",             \
+               __LINE__, status);                  \
+        return EXIT_FAILURE;                                                   \
+    }                                                                          \
+}
 
 #define CHECK_CUDA(func)                                                       \
 {                                                                              \
@@ -100,51 +116,35 @@ void initMatrix(float **mat, int numRows, int numCols) {
     }
 }
 
+
 // AB (A weight, B activation)
 // A (M x K)
 // B (K x N)
-float run_dmm(
-    const int A_num_rows,
-    const int A_num_cols,
-    const int B_num_cols,
+float run_gemm(
+    const int A_num_rows, // M
+    const int A_num_cols, // K
+    const int B_num_cols, // N
     int num_tests=10000
 ) {
 
-    const int   A_nnz           = (1-sparsity) * A_num_rows * A_num_cols;
-    const int   B_num_rows      = A_num_cols;
+    const int M = A_num_rows;
+    const int N = A_num_cols;
+    const int K = B_num_cols;
 
-    int   ldb             = B_num_rows;
-    int   ldc             = A_num_rows;
-    int   B_size          = ldb * B_num_cols;
-    int   C_size          = ldc * B_num_cols;
+    int   A_size          = M * K;
+    int   B_size          = K * N;
+    int   C_size          = M * K;
 
-    float *hA_values = new float[A_nnz];
-    int   *hA_csrOffsets = new int[A_num_rows + 1];
-    int   *hA_columns = new int[A_nnz];
-
+    float *hA = new float[A_size];
     float *hB = new float[B_size];
     float *hC = new float[C_size];
 
-    // Initialize sparse A
+    cublasOperation_t transa = CUBLAS_OP_N;
+    cublasOperation_t transb = CUBLAS_OP_N;
+
+    // Initialize dense A & B
     {
-        // Initialize values
-        initMatrix(hA_values, A_nnz, 1);
-
-        // Initialize the column indices with random indices (for demonstration)
-        for (int i = 0; i < A_nnz; ++i) {
-            hA_columns[i] = rand() % A_num_cols;
-        }
-
-        // Initialize the row pointers in a way that the non-zeros are roughly evenly distributed
-        // (This is just for demonstration purposes)
-        hA_csrOffsets[0] = 0;
-        for (int i = 1; i <= A_num_rows; ++i) {
-            hA_csrOffsets[i] = hA_csrOffsets[i - 1] + (A_nnz / A_num_rows);
-        }
-    }
-
-    // Initialize dense B & C
-    {
+        initMatrix(hA, A_size, 1);
         initMatrix(hB, B_size, 1);
         initMatrix(hC, C_size, 1);
 
@@ -154,84 +154,80 @@ float run_dmm(
         // std::cout << "print finished for Mat C" << std::endl;
     }
 
-    float alpha           = 1.0f;
-    float beta            = 0.0f;
     //--------------------------------------------------------------------------
     // Device memory management
-    int   *dA_csrOffsets, *dA_columns;
-    float *dA_values;
-    float *dB, *dC;
+    float *dA, *dB, *dC;
 
-    CHECK_CUDA( cudaMalloc((void**) &dA_csrOffsets, (A_num_rows + 1) * sizeof(int)) )
-    CHECK_CUDA( cudaMalloc((void**) &dA_columns, A_nnz * sizeof(int))    )
-    CHECK_CUDA( cudaMalloc((void**) &dA_values,  A_nnz * sizeof(float))  )
+    CHECK_CUDA( cudaMalloc((void**) &dA, A_size * sizeof(float)) )
+    CHECK_CUDA( cudaMalloc((void**) &dB, B_size * sizeof(float)) )
+    CHECK_CUDA( cudaMalloc((void**) &dC, C_size * sizeof(float)) )
 
-    CHECK_CUDA( cudaMalloc((void**) &dB,         B_size * sizeof(float)) )
-    CHECK_CUDA( cudaMalloc((void**) &dC,         C_size * sizeof(float)) )
-
-    CHECK_CUDA( cudaMemcpy(dA_csrOffsets, hA_csrOffsets,
-                           (A_num_rows + 1) * sizeof(int),
-                           cudaMemcpyHostToDevice) )
-    CHECK_CUDA( cudaMemcpy(dA_columns, hA_columns, A_nnz * sizeof(int),
-                           cudaMemcpyHostToDevice) )
-    CHECK_CUDA( cudaMemcpy(dA_values, hA_values, A_nnz * sizeof(float),
+    CHECK_CUDA( cudaMemcpy(dA, hA, A_size * sizeof(float),
                            cudaMemcpyHostToDevice) )
     CHECK_CUDA( cudaMemcpy(dB, hB, B_size * sizeof(float),
                            cudaMemcpyHostToDevice) )
     CHECK_CUDA( cudaMemcpy(dC, hC, C_size * sizeof(float),
                            cudaMemcpyHostToDevice) )
-    //--------------------------------------------------------------------------
-    // CUSPARSE APIs
-    cusparseHandle_t     handle = NULL;
-    cusparseSpMatDescr_t matA;
-    cusparseDnMatDescr_t matB, matC;
-    void*                dBuffer    = NULL;
-    size_t               bufferSize = 0;
-    CHECK_CUSPARSE( cusparseCreate(&handle) )
-    // Create sparse matrix A in CSR format
-    CHECK_CUSPARSE( cusparseCreateCsr(&matA, A_num_rows, A_num_cols, A_nnz,
-                                      dA_csrOffsets, dA_columns, dA_values,
-                                      CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
-                                      CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F) )
-    // Create dense matrix B
-    CHECK_CUSPARSE( cusparseCreateDnMat(&matB, A_num_cols, B_num_cols, ldb, dB,
-                                        CUDA_R_32F, CUSPARSE_ORDER_COL) )
-    // Create dense matrix C
-    CHECK_CUSPARSE( cusparseCreateDnMat(&matC, A_num_rows, B_num_cols, ldc, dC,
-                                        CUDA_R_32F, CUSPARSE_ORDER_COL) )
 
-    // allocate an external buffer if needed
-    CHECK_CUSPARSE( cusparseSpMM_bufferSize(
-                                 handle,
-                                 CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                 CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                 &alpha, matA, matB, &beta, matC, CUDA_R_32F,
-                                 CUSPARSE_SPMM_ALG_DEFAULT, &bufferSize) )
-    CHECK_CUDA( cudaMalloc(&dBuffer, bufferSize) )
+    const float alpha           = 1.0f;
+    const float beta            = 0.0f;
+
+    //--------------------------------------------------------------------------
+    // CUBLAS APIs
+    cublasHandle_t cublasH = NULL;
+    cudaStream_t stream = NULL;
+
+    CHECK_CUBLAS(cublasCreate(&cublasH));
+    CHECK_CUDA(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+    CHECK_CUBLAS(cublasSetStream(cublasH, stream));
+
+    ////////////////////////////////////////////////////////////////////////////
+    // RUN TEST
+    ////////////////////////////////////////////////////////////////////////////
+
+    // warmup
+    for (int i = 0; i < 20; i++){
+        CHECK_CUBLAS(
+            cublasSgemm(cublasH,
+                transa,
+                transb,
+                // M, N, K,
+                N, M, K,
+                &alpha,
+                dB, N,
+                dA, K,
+                &beta,
+                dC, N
+            )
+        );
+    }
 
     float milliseconds = 0;
     cudaEvent_t start, stop;
     CHECK_CUDA(cudaEventCreate(&start));
     CHECK_CUDA(cudaEventCreate(&stop));
-    
-    ////////////////////////////////////////////////////////////////////////////
-    // RUN TEST
-    ////////////////////////////////////////////////////////////////////////////
+
+    // Starting a range
+    nvtxRangePush("CUBLAS_test");
 
     // Record the start event
     CHECK_CUDA(cudaEventRecord(start));
 
     // execute SpMM
     for (int i = 0; i < num_tests; i++){
-        // Starting a range
-        nvtxRangePush("RunSingleTest");
-        CHECK_CUSPARSE( cusparseSpMM(handle,
-                                    CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                    CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                    &alpha, matA, matB, &beta, matC, CUDA_R_32F,
-                                    CUSPARSE_SPMM_ALG_DEFAULT, dBuffer) )
-        // Ending a range
-        nvtxRangePop();
+        CHECK_CUBLAS(
+            cublasSgemm(cublasH,
+                transa,
+                transb,
+                // M, N, K,
+                N, M, K,
+                &alpha,
+                dB, N,
+                dA, K,
+                &beta,
+                dC, N
+            )
+        );
     }
 
     // Record the end event
@@ -243,37 +239,34 @@ float run_dmm(
     // Calculate the elapsed time between the start and stop events
     CHECK_CUDA(cudaEventElapsedTime(&milliseconds, start, stop));
 
+    // Ending a range
+    nvtxRangePop();
+
 
     /////////////////////////////////////////////////////
     // CLEANUP
     /////////////////////////////////////////////////////
-
-    // destroy matrix/vector descriptors
-    CHECK_CUSPARSE( cusparseDestroySpMat(matA) )
-    CHECK_CUSPARSE( cusparseDestroyDnMat(matB) )
-    CHECK_CUSPARSE( cusparseDestroyDnMat(matC) )
-    CHECK_CUSPARSE( cusparseDestroy(handle) )
-
-    // //--------------------------------------------------------------------------
-    // // device memory deallocation
-    // CHECK_CUDA( cudaFree(dBuffer) )
-    CHECK_CUDA( cudaFree(dA_csrOffsets) )
-    CHECK_CUDA( cudaFree(dA_columns) )
-    CHECK_CUDA( cudaFree(dA_values) )
-    CHECK_CUDA( cudaFree(dB) )
-    CHECK_CUDA( cudaFree(dC) )
+    // device memory
+    CHECK_CUDA(cudaFree(dA));
+    CHECK_CUDA(cudaFree(dB));
+    CHECK_CUDA(cudaFree(dC));
     
-    free(hA_values);
-    free(hA_csrOffsets);
-    free(hA_columns);
+    // host mem
+    free(hA);
     free(hB);
     free(hC);
 
-    CHECK_CUDA( cudaEventDestroy(start))
-    CHECK_CUDA( cudaEventDestroy(stop))
-    
+    // event, handle, stream, device
+    CHECK_CUDA(cudaEventDestroy(start))
+    CHECK_CUDA(cudaEventDestroy(stop))
+    CHECK_CUBLAS(cublasDestroy(cublasH));
+    CHECK_CUDA(cudaStreamDestroy(stream));
+    CHECK_CUDA(cudaDeviceReset());
+
     return milliseconds;
 }
+
+
 float run_spmm(
     const float sparsity,
     const int A_num_rows,
@@ -293,7 +286,6 @@ float run_spmm(
     float *hA_values = new float[A_nnz];
     int   *hA_csrOffsets = new int[A_num_rows + 1];
     int   *hA_columns = new int[A_nnz];
-
     float *hB = new float[B_size];
     float *hC = new float[C_size];
 
@@ -319,15 +311,11 @@ float run_spmm(
     {
         initMatrix(hB, B_size, 1);
         initMatrix(hC, C_size, 1);
-
-        // printMatrix(hB, B_size, 1);
-        // std::cout << "print finished for Mat B" << std::endl;
-        // printMatrix(hC, C_size, 1);
-        // std::cout << "print finished for Mat C" << std::endl;
     }
 
     float alpha           = 1.0f;
     float beta            = 0.0f;
+
     //--------------------------------------------------------------------------
     // Device memory management
     int   *dA_csrOffsets, *dA_columns;
@@ -380,30 +368,28 @@ float run_spmm(
                                  &alpha, matA, matB, &beta, matC, CUDA_R_32F,
                                  CUSPARSE_SPMM_ALG_DEFAULT, &bufferSize) )
     CHECK_CUDA( cudaMalloc(&dBuffer, bufferSize) )
-
-    float milliseconds = 0;
-    cudaEvent_t start, stop;
-    CHECK_CUDA(cudaEventCreate(&start));
-    CHECK_CUDA(cudaEventCreate(&stop));
     
     ////////////////////////////////////////////////////////////////////////////
     // RUN TEST
     ////////////////////////////////////////////////////////////////////////////
+    float milliseconds = 0;
+    cudaEvent_t start, stop;
+    CHECK_CUDA(cudaEventCreate(&start));
+    CHECK_CUDA(cudaEventCreate(&stop));
+
+    // Starting a range
+    nvtxRangePush("SpMM_test");
 
     // Record the start event
     CHECK_CUDA(cudaEventRecord(start));
 
     // execute SpMM
     for (int i = 0; i < num_tests; i++){
-        // Starting a range
-        nvtxRangePush("RunSingleTest");
         CHECK_CUSPARSE( cusparseSpMM(handle,
                                     CUSPARSE_OPERATION_NON_TRANSPOSE,
                                     CUSPARSE_OPERATION_NON_TRANSPOSE,
                                     &alpha, matA, matB, &beta, matC, CUDA_R_32F,
                                     CUSPARSE_SPMM_ALG_DEFAULT, dBuffer) )
-        // Ending a range
-        nvtxRangePop();
     }
 
     // Record the end event
@@ -415,34 +401,37 @@ float run_spmm(
     // Calculate the elapsed time between the start and stop events
     CHECK_CUDA(cudaEventElapsedTime(&milliseconds, start, stop));
 
+    // Ending a range
+    nvtxRangePop();
 
     /////////////////////////////////////////////////////
     // CLEANUP
     /////////////////////////////////////////////////////
 
-    // destroy matrix/vector descriptors
+    // matrix/vector descriptors
     CHECK_CUSPARSE( cusparseDestroySpMat(matA) )
     CHECK_CUSPARSE( cusparseDestroyDnMat(matB) )
     CHECK_CUSPARSE( cusparseDestroyDnMat(matC) )
     CHECK_CUSPARSE( cusparseDestroy(handle) )
 
-    // //--------------------------------------------------------------------------
-    // // device memory deallocation
-    // CHECK_CUDA( cudaFree(dBuffer) )
+    // device mem
     CHECK_CUDA( cudaFree(dA_csrOffsets) )
     CHECK_CUDA( cudaFree(dA_columns) )
     CHECK_CUDA( cudaFree(dA_values) )
     CHECK_CUDA( cudaFree(dB) )
     CHECK_CUDA( cudaFree(dC) )
     
+    // host mem
     free(hA_values);
     free(hA_csrOffsets);
     free(hA_columns);
     free(hB);
     free(hC);
 
+    // event, device
     CHECK_CUDA( cudaEventDestroy(start))
     CHECK_CUDA( cudaEventDestroy(stop))
+    CHECK_CUDA(cudaDeviceReset());
     
     return milliseconds;
 }
@@ -479,22 +468,20 @@ int main(int argc, char**argv) {
 
     parse_opt(argc, argv);
 
-    int num_tests = 10000;
+    int num_tests = 1000;
     float milliseconds_dense = 0.0, milliseconds_sparse = 0.0;
 
-    milliseconds_dense = run_dmm(M, K, N, num_tests) / num_tests;
+    milliseconds_dense = run_gemm(M, K, N, num_tests) / num_tests;
     milliseconds_sparse = run_spmm(sparsity, M, K, N, num_tests) / num_tests;
-    std::cout << "Tokens " << N << \
-                "DMM: " << milliseconds_dense << \
-                " milliseconds // " << \
-                " SpMM: " << milliseconds_sparse << \
-                " milliseconds" << std::endl;
-
-    // for (int n = 1 ; n <= N ; n *= 2){
-    //     std::cout << "Running for tokens : " << n << std::endl;
-    //     milliseconds = run_spmm(sparsity, M, K, n, num_tests) / num_tests;
-    //     std::cout << "Tokens " << n << " SpMM: " << milliseconds << " milliseconds" << std::endl;
-    // }
+    
+    printf("[M,N,K,Sp]=[%d,%d,%d,%.1f] dense %f sparse %f\n", M,N,K,sparsity,
+                                                    milliseconds_dense,
+                                                    milliseconds_sparse);
+    // std::cout << "[" << N << "] " \
+    //             "DMM: " << milliseconds_dense << \
+    //             " milliseconds // " << \
+    //             " SpMM: " << milliseconds_sparse << \
+    //             " milliseconds" << std::endl;
 
     return EXIT_SUCCESS;
 }

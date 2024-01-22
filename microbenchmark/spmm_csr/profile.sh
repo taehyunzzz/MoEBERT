@@ -7,7 +7,7 @@ sparsity=0.99
 for dmodel in 768; do
     dff=$(( ${dmodel} * 4 ))
     # for num_tokens in 1 4 16 64 256 1024; do 
-    for num_tokens in 16 1024; do 
+    for num_tokens in 1 16 64 256 1024; do 
 
         result_file="${result_dir}/prof_dff${dff}_dmodel${dmodel}_token${num_tokens}_sparsity${sparsity}.nsys-rep"
         CMD="
@@ -25,9 +25,9 @@ for dmodel in 768; do
             --cudabacktrace=true
             ${CMD}
         "
-        ${NSYS_CMD}
+        ${CMD}
 
-        sleep 2s;
+        sleep 1s;
 
     done
 done

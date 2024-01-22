@@ -9,7 +9,7 @@ def run_bash_script(cmd):
 
 list_task_name = [
     "rte",
-    # "cola",
+    "cola",
     # "mrpc",
     # "sst2",
     # "qnli",
