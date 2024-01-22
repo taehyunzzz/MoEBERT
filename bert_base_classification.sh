@@ -29,10 +29,10 @@ export warmup_steps=100
 export max_seq_length=256
 
 export logging_steps=0
-export eval_steps=100
+export eval_steps=200
 export save_strategy=no
 #export save_strategy=steps
-export save_steps=100
+export save_steps=200
 export save_total_limit=1
 
 export WANDB_ENTITY="taehyunzzz"
@@ -42,77 +42,72 @@ export WANDB_PROJECT="diffmoebert-ablation"
 # FIXME : TASK (set as arg)
 ###########################################
 if [[ 1 ]]; then
-if [[ ${task_name} == "rte" ]]; then
-    export learning_rate="1e-5"
-    export batch_size=16
-    export num_train_epochs=10
-    export weight_decay=0.01
-    export moebert_distill=1.0
-    export ckpt_name="checkpoint-1550"
+    if [[ ${task_name} == "rte" ]]; then
+        export learning_rate="1e-5"
+        export batch_size=16
+        export num_train_epochs=10
+        export weight_decay=0.01
+        export moebert_distill=1.0
+        export ckpt_name="checkpoint-1550"
 
-elif [[ ${task_name} == "cola" ]]; then
-    export learning_rate="2e-5"
-    export batch_size=16
-    export num_train_epochs=20
-    export weight_decay=0.0
-    export moebert_distill=3.0
-    export ckpt_name="checkpoint-10700"
+    elif [[ ${task_name} == "cola" ]]; then
+        export learning_rate="2e-5"
+        export batch_size=16
+        export num_train_epochs=20
+        export weight_decay=0.0
+        export moebert_distill=3.0
+        export ckpt_name="checkpoint-10700"
 
-elif [[ ${task_name} == "mrpc" ]]; then
-    export learning_rate="3e-5"
-    export batch_size=16
-    export num_train_epochs=10
-    export weight_decay=0.0
-    export moebert_distill=2.0
-    export ckpt_name="checkpoint-2300"
+    elif [[ ${task_name} == "mrpc" ]]; then
+        export learning_rate="3e-5"
+        export batch_size=16
+        export num_train_epochs=10
+        export weight_decay=0.0
+        export moebert_distill=2.0
+        export ckpt_name="checkpoint-2300"
 
-elif [[ ${task_name} == "sst2" ]]; then
-    export learning_rate="2e-5"
-    export batch_size=16
-    export num_train_epochs=5
-    export weight_decay=0.0
-    export moebert_distill=1.0
-    export ckpt_name="checkpoint-21050"
+    elif [[ ${task_name} == "sst2" ]]; then
+        export learning_rate="2e-5"
+        export batch_size=16
+        export num_train_epochs=5
+        export weight_decay=0.0
+        export moebert_distill=1.0
+        export ckpt_name="checkpoint-21050"
 
-elif [[ ${task_name} == "qnli" ]]; then
-    export learning_rate="1e-5"
-    export batch_size=32
-    export num_train_epochs=10
-    export weight_decay=0.00
-    export moebert_distill=2.0
-    export ckpt_name="checkpoint-32650"
+    elif [[ ${task_name} == "qnli" ]]; then
+        export learning_rate="1e-5"
+        export batch_size=32
+        export num_train_epochs=10
+        export weight_decay=0.00
+        export moebert_distill=2.0
+        export ckpt_name="checkpoint-32650"
 
-elif [[ ${task_name} == "mnli" ]]; then
-    export learning_rate="5e-5"
-    export batch_size=64
-    export num_train_epochs=10
-    export weight_decay=0.00
-    export moebert_distill=5.0
-    export ckpt_name="checkpoint-61350"
+    elif [[ ${task_name} == "mnli" ]]; then
+        export learning_rate="5e-5"
+        export batch_size=64
+        export num_train_epochs=10
+        export weight_decay=0.00
+        export moebert_distill=5.0
+        export ckpt_name="checkpoint-61350"
 
-    export eval_steps=$(( ${eval_steps} * 4 ))
-    export save_steps=$(( ${save_steps} * 4 ))
+        export eval_steps=$(( ${eval_steps} * 4 ))
+        export save_steps=$(( ${save_steps} * 4 ))
 
-elif [[ ${task_name} == "qqp" ]]; then
-    export learning_rate="3e-5"
-    export batch_size=64
-    export num_train_epochs=10
-    export weight_decay=0.00
-    export moebert_distill=1.0
-    export ckpt_name="checkpoint-5600"
+    elif [[ ${task_name} == "qqp" ]]; then
+        export learning_rate="3e-5"
+        export batch_size=64
+        export num_train_epochs=10
+        export weight_decay=0.00
+        export moebert_distill=1.0
+        export ckpt_name="checkpoint-5600"
 
-    export eval_steps=$(( ${eval_steps} * 4 ))
-    export save_steps=$(( ${save_steps} * 4 ))
+        export eval_steps=$(( ${eval_steps} * 4 ))
+        export save_steps=$(( ${save_steps} * 4 ))
 
-else
-    echo "Wrong task ${task_name}. Running MNLI"
-    export learning_rate="5e-5"
-    export batch_size=64
-    export num_train_epochs=5
-    export weight_decay=0.00
-    export moebert_distill=5.0
-
-fi
+    else
+        echo "Wrong task ${task_name}. Exiting"
+        exit 1
+    fi
 fi
 
 
@@ -137,18 +132,11 @@ fi
 # FIXME : MOE CONFIG
 ###########################################
 if [[ 1 ]]; then
-random_seed=0
-# moebert_expert_num=16
 
-    # moebert_expert_dim=768
-    # moebert_expert_dim=1024
-    # moebert_expert_dim=2048
+    random_seed=0
+    # moebert_expert_num=16
     # moebert_expert_dim=3072
-
-    # moebert_share_importance=768
-    # moebert_share_importance=1024
     # moebert_share_importance=2048
-    # moebert_share_importance=3072
 
     moebert_expert_dropout=0.1
     moebert_load_balance=0.0
@@ -162,9 +150,9 @@ random_seed=0
     moebert_sparsity_pen=1.25e-7
     
     # diff pruning params
-    moebert_learning_rate_alpha=1e-2
+    moebert_learning_rate_alpha=1e-3
     moebert_l0_loss_scale=1e1
-    # moebert_target_sparsity=3e-2
+
 fi
 
 ###########################################
