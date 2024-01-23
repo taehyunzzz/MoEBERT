@@ -1789,6 +1789,7 @@ class Trainer:
         eval_dataset: Optional[Dataset] = None,
         ignore_keys: Optional[List[str]] = None,
         metric_key_prefix: str = "eval",
+        task_name:str = None,
     ) -> Dict[str, float]:
         """
         Run evaluation and returns metrics.
@@ -1836,7 +1837,12 @@ class Trainer:
         if self.model.config.preprocess_importance:
             import pickle
             local_rank = torch.distributed.get_rank()
-            name = "importance_" + str(local_rank) + ".pkl"
+
+            if task_name != None:
+                name = "importance_{}_".format(task_name) + str(local_rank) + ".pkl"
+            else:
+                name = "importance_" + str(local_rank) + ".pkl"
+
             with open(name, "wb") as file:
                 pickle.dump(self.model.importance_ffn.cpu().tolist(), file)
 

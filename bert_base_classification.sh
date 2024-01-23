@@ -56,7 +56,7 @@ if [[ 1 ]]; then
         export num_train_epochs=10
         export weight_decay=0.0
         export moebert_distill=3.0
-        export ckpt_name="checkpoint-10700"
+        export ckpt_name="checkpoint-10600"
 
     elif [[ ${task_name} == "mrpc" ]]; then
         export learning_rate="3e-5"
@@ -72,7 +72,7 @@ if [[ 1 ]]; then
         export num_train_epochs=5
         export weight_decay=0.0
         export moebert_distill=1.0
-        export ckpt_name="checkpoint-21050"
+        export ckpt_name="checkpoint-21000"
 
     elif [[ ${task_name} == "qnli" ]]; then
         export learning_rate="1e-5"
@@ -247,8 +247,9 @@ elif [[ ${MODE} == "importance" ]]; then
          --preprocess_importance y"
 
     # Merge importance
-    CMD2="python merge_importance.py --num_files 1"
-    CMD3="mv importance.pkl importance_files/importance_${task_name}.pkl"
+    mkdir -p importance_files
+    CMD2="python merge_importance.py --num_files 1 --task_name ${task_name}"
+    CMD3="mv importance_${task_name}.pkl importance_files/importance_${task_name}.pkl"
 
 elif [[ ${MODE} == "moe" || ${MODE} == "diffmoe" ]]; then
     echo "Finetune MoEBERT"

@@ -257,17 +257,17 @@ def run_cmds(commands, num_workers=4):
 
 def main():
     # dense 
-    if 1:
+    if 0:
         cmd_list = create_sweep_cmd(**sweep_dense()          , base_port_num=9000)
         run_cmds(cmd_list, num_workers=4)
 
     # importance
     if 0:
         cmd_list = create_sweep_cmd(**sweep_importance()   , base_port_num=8000)
-        run_cmds(cmd_list, num_workers=1)
+        run_cmds(cmd_list, num_workers=4)
 
-    if 0:
-        # cmd_list = create_sweep_cmd(**sweep_expert()         , base_port_num=6000)
+    if 1:
+        cmd_list = create_sweep_cmd(**sweep_expert()         , base_port_num=6000)
         # cmd_list = create_sweep_cmd(**sweep_shared_dim()     , base_port_num=7000)
         # cmd_list = create_sweep_cmd(**sweep_target_sparsity(), base_port_num=8000)
         run_cmds(cmd_list, num_workers=4)

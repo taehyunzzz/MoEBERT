@@ -760,7 +760,8 @@ def main():
             eval_datasets.append(datasets["validation_mismatched"])
 
         for eval_dataset, task in zip(eval_datasets, tasks):
-            metrics = trainer.evaluate(eval_dataset=eval_dataset)
+            metrics = trainer.evaluate(eval_dataset=eval_dataset,
+                                       task_name=data_args.task_name)
 
             max_val_samples = data_args.max_val_samples if data_args.max_val_samples is not None else len(eval_dataset)
             metrics["eval_samples"] = min(max_val_samples, len(eval_dataset))
